@@ -1,6 +1,6 @@
 
 NVCC:=/usr/local/cuda-9.0/bin/nvcc
-CFLAGS:=--ptxas-options=-v --gpu-architecture=compute_61 -O3 -g
+CFLAGS:=--ptxas-options=-v --gpu-architecture=compute_61 -O3 -g -Xcompiler "-Wall -Werror"
 LIB:=cuda_verify_ed25519
 
 all: cuda_ed25519_verify

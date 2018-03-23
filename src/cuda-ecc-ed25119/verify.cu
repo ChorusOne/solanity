@@ -123,7 +123,7 @@ void ed25519_verify_many(const unsigned char* signatures,
 {
     int num_threads_per_block = 64;
     int num_blocks = std::max(1ul, num_keys / num_threads_per_block);
-    printf("num_blocks: %d threads_per_block: %d\n", num_blocks, num_threads_per_block);
+    //printf("num_blocks: %d threads_per_block: %d keys: %d\n", num_blocks, num_threads_per_block, (int)num_keys);
     ed25519_verify_kernel<<<num_blocks, num_threads_per_block>>>
                             (signatures, messages, message_lens, message_offsets, public_keys, num_keys, out);
 }
