@@ -99,70 +99,77 @@ ed25519_verify(const unsigned char *signature,
     return ed25519_verify_device(signature, message, message_len, public_key);
 }
 
-__global__ void ed25519_verify_kernel(const unsigned char* signatures,
-                                      const unsigned char* messages,
+__global__ void ed25519_verify_kernel(const unsigned char* packets,
+                                      const uint32_t* packet_offsets,
+                                      const uint32_t* packet_lens,
                                       const uint32_t* message_lens,
                                       const uint32_t* message_offsets,
-                                      const unsigned char* public_keys,
+                                      uint32_t public_key_offset,
+                                      uint32_t signature_offset,
                                       size_t num_keys,
-                                      int* out)
+                                      uint8_t* out)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < num_keys) {
-        out[i] = ed25519_verify_device(&signatures[SIG_SIZE * i],
-                                       &messages[message_offsets[i]],
+        const uint8_t* packet = &packets[packet_offsets[i]];
+        out[i] = ed25519_verify_device(&packet[signature_offset],
+                                       &packet[message_offsets[i]],
                                        message_lens[i],
-                                       &public_keys[i * PUB_KEY_SIZE]);
+                                       &packet[public_key_offset]);
     }
 }
 
 typedef struct {
-    unsigned char* signatures;
-    unsigned char* messages;
+    unsigned char* packets;
+    uint32_t* packet_lens;
+    uint32_t* packet_offsets;
     uint32_t* message_lens;
     uint32_t* message_offsets;
-    unsigned char* public_keys;
-    unsigned char* private_keys;
-    int* out;
+    uint8_t* out;
 
     size_t num_keys;
-    uint32_t total_messages_len;
+    uint32_t total_packets_len;
 } gpu_ctx;
 
 static gpu_ctx g_gpu_ctx = {0};
 static bool g_verbose = false;
 #define LOG(...) if (g_verbose) { printf(__VA_ARGS__); }
 
-void ed25519_verify_many(const unsigned char* signatures,
-                         const unsigned char* messages,
+void ed25519_verify_many(const uint8_t* packets,
+                         const uint32_t* packet_lens,
+                         const uint32_t* packet_offsets,
                          const uint32_t* message_lens,
                          const uint32_t* message_offsets,
-                         const unsigned char* public_keys,
+                         uint32_t public_key_offset,
+                         uint32_t signature_offset,
                          size_t num_keys,
-                         int* out)
+                         uint8_t* out)
 {
-    size_t out_size = num_keys * sizeof(int);
+    size_t out_size = num_keys * sizeof(uint8_t);
 
-    uint32_t total_messages_len = message_offsets[num_keys-1] + message_lens[num_keys-1];
+    uint32_t total_packets_len = packet_offsets[num_keys-1] + packet_lens[num_keys-1];
 
-    LOG("device allocate.. %d\n", total_messages_len);
+    LOG("device allocate.. %d\n", total_packets_len);
     // Device allocate
 
-    if (g_gpu_ctx.messages == NULL ||
-        total_messages_len > g_gpu_ctx.total_messages_len) {
-        CUDA_CHK(cudaFree(g_gpu_ctx.messages));
-        CUDA_CHK(cudaMalloc(&g_gpu_ctx.messages, total_messages_len));
+    if (g_gpu_ctx.packets == NULL ||
+        total_packets_len > g_gpu_ctx.total_packets_len) {
+        CUDA_CHK(cudaFree(g_gpu_ctx.packets));
+        CUDA_CHK(cudaMalloc(&g_gpu_ctx.packets, total_packets_len));
 
-        g_gpu_ctx.total_messages_len = total_messages_len;
+        g_gpu_ctx.total_packets_len = total_packets_len;
     }
 
-    if (g_gpu_ctx.signatures == NULL ||
+    if (g_gpu_ctx.message_lens == NULL ||
         num_keys > g_gpu_ctx.num_keys) {
 
         LOG("allocating keys.. %d\n", (int)num_keys);
 
-        CUDA_CHK(cudaFree(g_gpu_ctx.signatures));
-        CUDA_CHK(cudaMalloc(&g_gpu_ctx.signatures, num_keys * SIG_SIZE));
+        CUDA_CHK(cudaFree(g_gpu_ctx.packet_lens));
+        CUDA_CHK(cudaMalloc(&g_gpu_ctx.packet_lens, num_keys * sizeof(uint32_t)));
+
+        CUDA_CHK(cudaFree(g_gpu_ctx.packet_offsets));
+        CUDA_CHK(cudaMalloc(&g_gpu_ctx.packet_offsets, num_keys * sizeof(uint32_t)));
 
         CUDA_CHK(cudaFree(g_gpu_ctx.message_lens));
         CUDA_CHK(cudaMalloc(&g_gpu_ctx.message_lens, num_keys * sizeof(uint32_t)));
@@ -170,23 +177,17 @@ void ed25519_verify_many(const unsigned char* signatures,
         CUDA_CHK(cudaFree(g_gpu_ctx.message_offsets));
         CUDA_CHK(cudaMalloc(&g_gpu_ctx.message_offsets, num_keys * sizeof(uint32_t)));
 
-        CUDA_CHK(cudaFree(g_gpu_ctx.public_keys));
-        CUDA_CHK(cudaMalloc(&g_gpu_ctx.public_keys, num_keys * PUB_KEY_SIZE));
-
-        CUDA_CHK(cudaFree(g_gpu_ctx.private_keys));
-        CUDA_CHK(cudaMalloc(&g_gpu_ctx.private_keys, num_keys * PRIV_KEY_SIZE));
-
         CUDA_CHK(cudaFree(g_gpu_ctx.out));
         CUDA_CHK(cudaMalloc(&g_gpu_ctx.out, out_size));
 
         g_gpu_ctx.num_keys = num_keys;
     }
 
-    CUDA_CHK(cudaMemcpy(g_gpu_ctx.signatures, signatures, num_keys * SIG_SIZE, cudaMemcpyHostToDevice));
-    CUDA_CHK(cudaMemcpy(g_gpu_ctx.messages, messages, total_messages_len, cudaMemcpyHostToDevice));
+    CUDA_CHK(cudaMemcpy(g_gpu_ctx.packets, packets, total_packets_len, cudaMemcpyHostToDevice));
     CUDA_CHK(cudaMemcpy(g_gpu_ctx.message_lens, message_lens, num_keys * sizeof(uint32_t), cudaMemcpyHostToDevice));
     CUDA_CHK(cudaMemcpy(g_gpu_ctx.message_offsets, message_offsets, num_keys * sizeof(uint32_t), cudaMemcpyHostToDevice));
-    CUDA_CHK(cudaMemcpy(g_gpu_ctx.public_keys, public_keys, num_keys * PUB_KEY_SIZE, cudaMemcpyHostToDevice));
+    CUDA_CHK(cudaMemcpy(g_gpu_ctx.packet_lens, packet_lens, num_keys * sizeof(uint32_t), cudaMemcpyHostToDevice));
+    CUDA_CHK(cudaMemcpy(g_gpu_ctx.packet_offsets, packet_offsets, num_keys * sizeof(uint32_t), cudaMemcpyHostToDevice));
 
     int num_threads_per_block = 64;
     int num_blocks = (num_keys + num_threads_per_block - 1) / num_threads_per_block;
@@ -195,8 +196,10 @@ void ed25519_verify_many(const unsigned char* signatures,
     perftime_t start, end;
     get_time(&start);
     ed25519_verify_kernel<<<num_blocks, num_threads_per_block>>>
-                            (g_gpu_ctx.signatures, g_gpu_ctx.messages, g_gpu_ctx.message_lens,
-                             g_gpu_ctx.message_offsets, g_gpu_ctx.public_keys, g_gpu_ctx.num_keys, g_gpu_ctx.out);
+                            (g_gpu_ctx.packets, g_gpu_ctx.packet_lens, g_gpu_ctx.packet_offsets,
+                             g_gpu_ctx.message_lens, g_gpu_ctx.message_offsets,
+                             public_key_offset, signature_offset,
+                             g_gpu_ctx.num_keys, g_gpu_ctx.out);
 
     CUDA_CHK(cudaMemcpy(out, g_gpu_ctx.out, out_size, cudaMemcpyDeviceToHost));
     get_time(&end);
@@ -204,11 +207,10 @@ void ed25519_verify_many(const unsigned char* signatures,
 }
 
 void ED25519_DECLSPEC ed25519_free_gpu_mem() {
-    CUDA_CHK(cudaFree(g_gpu_ctx.messages));
-    CUDA_CHK(cudaFree(g_gpu_ctx.signatures));
+    CUDA_CHK(cudaFree(g_gpu_ctx.packets));
     CUDA_CHK(cudaFree(g_gpu_ctx.message_lens));
     CUDA_CHK(cudaFree(g_gpu_ctx.message_offsets));
-    CUDA_CHK(cudaFree(g_gpu_ctx.public_keys));
-    CUDA_CHK(cudaFree(g_gpu_ctx.private_keys));
+    CUDA_CHK(cudaFree(g_gpu_ctx.packet_offsets));
+    CUDA_CHK(cudaFree(g_gpu_ctx.packet_lens));
     CUDA_CHK(cudaFree(g_gpu_ctx.out));
 }
