@@ -11,6 +11,9 @@
 
 #include "ed25519.h"
 
+#define USE_CLOCK_GETTIME
+#include "perftime.h"
+
 static int __host__ __device__ consttime_equal(const unsigned char *x, const unsigned char *y) {
     unsigned char r = 0;
 
@@ -189,11 +192,15 @@ void ed25519_verify_many(const unsigned char* signatures,
     int num_blocks = (num_keys + num_threads_per_block - 1) / num_threads_per_block;
     LOG("num_blocks: %d threads_per_block: %d keys: %d\n",
            num_blocks, num_threads_per_block, (int)num_keys);
+    perftime_t start, end;
+    get_time(&start);
     ed25519_verify_kernel<<<num_blocks, num_threads_per_block>>>
                             (g_gpu_ctx.signatures, g_gpu_ctx.messages, g_gpu_ctx.message_lens,
                              g_gpu_ctx.message_offsets, g_gpu_ctx.public_keys, g_gpu_ctx.num_keys, g_gpu_ctx.out);
 
     CUDA_CHK(cudaMemcpy(out, g_gpu_ctx.out, out_size, cudaMemcpyDeviceToHost));
+    get_time(&end);
+    LOG("time diff: %f\n", get_diff(&start, &end));
 }
 
 void ED25519_DECLSPEC ed25519_free_gpu_mem() {

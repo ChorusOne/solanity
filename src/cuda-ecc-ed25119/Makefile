@@ -17,3 +17,8 @@ verify.o.ranlib:verify.o.ar
 cuda_ed25519_verify:verify.o.ranlib main.cu lib$(LIB).a
 	$(NVCC) $(CFLAGS) -L. -l$(LIB) main.cu -o cuda_ed25519_verify
 
+.PHONY:clean
+clean:
+	rm -rf *.o
+	rm -rf *.a
+	rm -rf cuda_ed25519_verify
