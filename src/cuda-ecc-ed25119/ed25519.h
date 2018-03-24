@@ -37,6 +37,7 @@ int ED25519_DECLSPEC ed25519_verify(const unsigned char *signature, const unsign
 void ED25519_DECLSPEC ed25519_verify_many(const unsigned char *signature, const unsigned char *messages, const uint32_t *message_lens, const uint32_t* message_offsets, const unsigned char *public_key, size_t num_keys, int * out);
 void ED25519_DECLSPEC ed25519_add_scalar(unsigned char *public_key, unsigned char *private_key, const unsigned char *scalar);
 void ED25519_DECLSPEC ed25519_key_exchange(unsigned char *shared_secret, const unsigned char *public_key, const unsigned char *private_key);
+void ED25519_DECLSPEC ed25519_free_gpu_mem();
 
 
 #ifdef __cplusplus

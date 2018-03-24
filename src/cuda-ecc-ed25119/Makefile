@@ -5,7 +5,7 @@ LIB:=cuda_verify_ed25519
 
 all: cuda_ed25519_verify
 
-verify.o:verify.cu seed.cu sha512.cu ge.cu sc.cu fe.cu sign.cu keypair.cu
+verify.o:verify.cu seed.cu sha512.cu ge.cu sc.cu fe.cu sign.cu keypair.cu common.cu
 	$(NVCC) -rdc=true $(CFLAGS) -c verify.cu -o verify.o
 
 verify.o.ar:verify.o

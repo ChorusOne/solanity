@@ -28,12 +28,14 @@ int main(int argc, const char* argv[]) {
             return 1;
         }
     }
+
     int num_signatures = strtol(sig_ptr, NULL, 10);
+
     // Host allocate
     unsigned char* seed_h = (unsigned char*)calloc(num_signatures * SEED_SIZE, sizeof(uint32_t));
-    unsigned char* public_key_h = (unsigned char*)calloc(num_signatures, PUB_KEY_SIZE);
+    unsigned char* public_keys_h = (unsigned char*)calloc(num_signatures, PUB_KEY_SIZE);
     unsigned char* private_key_h = (unsigned char*)calloc(num_signatures, PRIV_KEY_SIZE);
-    unsigned char* signature_h = (unsigned char*)calloc(num_signatures, SIG_SIZE);
+    unsigned char* signatures_h = (unsigned char*)calloc(num_signatures, SIG_SIZE);
     unsigned char message_h[] = "abcd1234";
     int message_h_len = strlen((char*)message_h);
     unsigned char* messages_h = (unsigned char*)calloc(num_signatures, message_h_len);
@@ -49,48 +51,24 @@ int main(int argc, const char* argv[]) {
                message_lens_h[i], message_offsets_h[i], messages_h[i * message_h_len]);
     }
 
-    LOG("device allocate..\n");
-    // Device allocate
-    unsigned char* signature = NULL;
-    cudaMalloc(&signature, num_signatures * SIG_SIZE);
-
-    unsigned char* messages = NULL;
-    cudaMalloc(&messages, num_signatures * message_h_len);
-
-    LOG("device allocate2..\n");
-    uint32_t* message_lens = NULL;
-    cudaMalloc(&message_lens, num_signatures * sizeof(uint32_t));
-
-    uint32_t* message_offsets = NULL;
-    cudaMalloc(&message_offsets, num_signatures * sizeof(uint32_t));
-
-    unsigned char* public_key = NULL;
-    cudaMalloc(&public_key, num_signatures * PUB_KEY_SIZE);
-
-    unsigned char* private_key = NULL;
-    cudaMalloc(&private_key, num_signatures * PRIV_KEY_SIZE);
-
-    int* out = NULL;
     int out_size = num_signatures * sizeof(int);
-    cudaMalloc(&out, out_size);
-
     int* out_h = (int*)calloc(1, out_size);
 
     LOG("creating seed..\n");
     int ret = ed25519_create_seed(seed_h);
     LOG("create_seed: %d\n", ret);
-    ed25519_create_keypair(public_key_h, private_key_h, seed_h);
-    ed25519_sign(signature_h, message_h, message_h_len, public_key_h, private_key_h);
-    ret = ed25519_verify(signature_h, message_h, message_h_len, public_key_h);
+    ed25519_create_keypair(&public_keys_h[0], private_key_h, seed_h);
+    ed25519_sign(signatures_h, message_h, message_h_len, &public_keys_h[0], private_key_h);
+    ret = ed25519_verify(signatures_h, message_h, message_h_len, &public_keys_h[0]);
     LOG("verify: %d\n", ret);
 
     for (int i = 1; i < num_signatures; i++) {
-        memcpy(&signature_h[i * SIG_SIZE], signature_h, SIG_SIZE);
-        memcpy(&public_key_h[i * PUB_KEY_SIZE], public_key_h, PUB_KEY_SIZE);
+        memcpy(&signatures_h[i * SIG_SIZE], signatures_h, SIG_SIZE);
+        memcpy(&public_keys_h[i * PUB_KEY_SIZE], &public_keys_h[0], PUB_KEY_SIZE);
     }
 
     for (int i = 0; i < num_signatures; i++ ) {
-        unsigned char* sig_ptr = &signature_h[i * SIG_SIZE];
+        unsigned char* sig_ptr = &signatures_h[i * SIG_SIZE];
         unsigned char* messages_ptr = &messages_h[i * message_h_len];
         print_dwords(sig_ptr, SIG_SIZE);
         LOG("\n");
@@ -99,15 +77,10 @@ int main(int argc, const char* argv[]) {
     }
     LOG("\n");
 
-    cudaMemcpy(signature, signature_h, num_signatures * SIG_SIZE, cudaMemcpyHostToDevice);
-    cudaMemcpy(messages, messages_h, num_signatures * message_h_len, cudaMemcpyHostToDevice);
-    cudaMemcpy(message_lens, message_lens_h, num_signatures * sizeof(uint32_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(message_offsets, message_offsets_h, num_signatures * sizeof(uint32_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(public_key, public_key_h, num_signatures * PUB_KEY_SIZE, cudaMemcpyHostToDevice);
+    ed25519_verify_many(signatures_h, messages_h,
+                        message_lens_h, message_offsets_h,
+                        &public_keys_h[0], num_signatures, out_h);
 
-    ed25519_verify_many(signature, messages, message_lens, message_offsets, public_key, num_signatures, out);
-
-    cudaMemcpy(out_h, out, out_size, cudaMemcpyDeviceToHost);
     LOG("ret:\n");
     bool verify_failed = false;
     for (int i = 0; i < out_size / (int)sizeof(int); i++) {
@@ -119,5 +92,6 @@ int main(int argc, const char* argv[]) {
     LOG("\n");
     fflush(stdout);
     assert(verify_failed == false);
+    ed25519_free_gpu_mem();
     return 0;
 }

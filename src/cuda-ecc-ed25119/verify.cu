@@ -113,6 +113,23 @@ __global__ void ed25519_verify_kernel(const unsigned char* signatures,
     }
 }
 
+typedef struct {
+    unsigned char* signatures;
+    unsigned char* messages;
+    uint32_t* message_lens;
+    uint32_t* message_offsets;
+    unsigned char* public_keys;
+    unsigned char* private_keys;
+    int* out;
+
+    size_t num_keys;
+    uint32_t total_messages_len;
+} gpu_ctx;
+
+static gpu_ctx g_gpu_ctx = {0};
+static bool g_verbose = false;
+#define LOG(...) if (g_verbose) { printf(__VA_ARGS__); }
+
 void ed25519_verify_many(const unsigned char* signatures,
                          const unsigned char* messages,
                          const uint32_t* message_lens,
@@ -121,11 +138,70 @@ void ed25519_verify_many(const unsigned char* signatures,
                          size_t num_keys,
                          int* out)
 {
+    size_t out_size = num_keys * sizeof(int);
+
+    uint32_t total_messages_len = message_offsets[num_keys-1] + message_lens[num_keys-1];
+
+    LOG("device allocate.. %d\n", total_messages_len);
+    // Device allocate
+
+    if (g_gpu_ctx.messages == NULL ||
+        total_messages_len > g_gpu_ctx.total_messages_len) {
+        CUDA_CHK(cudaFree(g_gpu_ctx.messages));
+        CUDA_CHK(cudaMalloc(&g_gpu_ctx.messages, total_messages_len));
+
+        g_gpu_ctx.total_messages_len = total_messages_len;
+    }
+
+    if (g_gpu_ctx.signatures == NULL ||
+        num_keys > g_gpu_ctx.num_keys) {
+
+        LOG("allocating keys.. %d\n", (int)num_keys);
+
+        CUDA_CHK(cudaFree(g_gpu_ctx.signatures));
+        CUDA_CHK(cudaMalloc(&g_gpu_ctx.signatures, num_keys * SIG_SIZE));
+
+        CUDA_CHK(cudaFree(g_gpu_ctx.message_lens));
+        CUDA_CHK(cudaMalloc(&g_gpu_ctx.message_lens, num_keys * sizeof(uint32_t)));
+
+        CUDA_CHK(cudaFree(g_gpu_ctx.message_offsets));
+        CUDA_CHK(cudaMalloc(&g_gpu_ctx.message_offsets, num_keys * sizeof(uint32_t)));
+
+        CUDA_CHK(cudaFree(g_gpu_ctx.public_keys));
+        CUDA_CHK(cudaMalloc(&g_gpu_ctx.public_keys, num_keys * PUB_KEY_SIZE));
+
+        CUDA_CHK(cudaFree(g_gpu_ctx.private_keys));
+        CUDA_CHK(cudaMalloc(&g_gpu_ctx.private_keys, num_keys * PRIV_KEY_SIZE));
+
+        CUDA_CHK(cudaFree(g_gpu_ctx.out));
+        CUDA_CHK(cudaMalloc(&g_gpu_ctx.out, out_size));
+
+        g_gpu_ctx.num_keys = num_keys;
+    }
+
+    CUDA_CHK(cudaMemcpy(g_gpu_ctx.signatures, signatures, num_keys * SIG_SIZE, cudaMemcpyHostToDevice));
+    CUDA_CHK(cudaMemcpy(g_gpu_ctx.messages, messages, total_messages_len, cudaMemcpyHostToDevice));
+    CUDA_CHK(cudaMemcpy(g_gpu_ctx.message_lens, message_lens, num_keys * sizeof(uint32_t), cudaMemcpyHostToDevice));
+    CUDA_CHK(cudaMemcpy(g_gpu_ctx.message_offsets, message_offsets, num_keys * sizeof(uint32_t), cudaMemcpyHostToDevice));
+    CUDA_CHK(cudaMemcpy(g_gpu_ctx.public_keys, public_keys, num_keys * PUB_KEY_SIZE, cudaMemcpyHostToDevice));
+
     int num_threads_per_block = 64;
-    int num_blocks = std::max(1ul, num_keys / num_threads_per_block);
-    //printf("num_blocks: %d threads_per_block: %d keys: %d\n", num_blocks, num_threads_per_block, (int)num_keys);
+    int num_blocks = (num_keys + num_threads_per_block - 1) / num_threads_per_block;
+    LOG("num_blocks: %d threads_per_block: %d keys: %d\n",
+           num_blocks, num_threads_per_block, (int)num_keys);
     ed25519_verify_kernel<<<num_blocks, num_threads_per_block>>>
-                            (signatures, messages, message_lens, message_offsets, public_keys, num_keys, out);
+                            (g_gpu_ctx.signatures, g_gpu_ctx.messages, g_gpu_ctx.message_lens,
+                             g_gpu_ctx.message_offsets, g_gpu_ctx.public_keys, g_gpu_ctx.num_keys, g_gpu_ctx.out);
+
+    CUDA_CHK(cudaMemcpy(out, g_gpu_ctx.out, out_size, cudaMemcpyDeviceToHost));
 }
 
-
+void ED25519_DECLSPEC ed25519_free_gpu_mem() {
+    CUDA_CHK(cudaFree(g_gpu_ctx.messages));
+    CUDA_CHK(cudaFree(g_gpu_ctx.signatures));
+    CUDA_CHK(cudaFree(g_gpu_ctx.message_lens));
+    CUDA_CHK(cudaFree(g_gpu_ctx.message_offsets));
+    CUDA_CHK(cudaFree(g_gpu_ctx.public_keys));
+    CUDA_CHK(cudaFree(g_gpu_ctx.private_keys));
+    CUDA_CHK(cudaFree(g_gpu_ctx.out));
+}
