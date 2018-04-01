@@ -17,6 +17,7 @@ void print_dwords(unsigned char* ptr, int size) {
 typedef struct {
     uint8_t signature[SIG_SIZE];
     uint8_t public_key[PUB_KEY_SIZE];
+    uint32_t message_len;
     uint8_t message[8];
 } packet_t;
 
@@ -47,26 +48,24 @@ int main(int argc, const char* argv[]) {
     unsigned char* private_key_h = (unsigned char*)calloc(num_signatures, PRIV_KEY_SIZE);
     unsigned char message_h[] = "abcd1234";
     int message_h_len = strlen((char*)message_h);
+    uint32_t message_len_offset = offsetof(packet_t, message_len);
+    uint32_t signature_offset = offsetof(packet_t, signature);
+    uint32_t public_key_offset = offsetof(packet_t, public_key);
+    uint32_t message_start_offset = offsetof(packet_t, message);
 
-    std::vector<packet_t> packets_h = std::vector<packet_t>(num_signatures);
-    std::vector<uint32_t> packet_offsets_h = std::vector<uint32_t>(num_signatures);
-    std::vector<uint32_t> packet_lens_h = std::vector<uint32_t>(num_signatures);
-
-    std::vector<uint32_t> message_offsets_h = std::vector<uint32_t>(num_signatures);
-    std::vector<uint32_t> message_lens_h = std::vector<uint32_t>(num_signatures);
-
-    assert(message_h_len == sizeof(packets_h[0].message));
+    std::vector<streamer_Packet> packets_h = std::vector<streamer_Packet>(num_signatures);
+    gpu_Elems elems_h = {0};
+    elems_h.num = num_signatures;
+    elems_h.elems = &packets_h[0];
 
     LOG("initing signatures..\n");
     for (int i = 0; i < num_signatures; i++) {
-        memcpy(packets_h[i].message, message_h, message_h_len);
-        message_lens_h[i] = message_h_len;
-        message_offsets_h[i] = offsetof(packet_t, message);
-        packet_offsets_h[i] = i * sizeof(packet_t);
-        packet_lens_h[i] = sizeof(packet_t);
+        packet_t* packet = (packet_t*)packets_h[i].data;
+        memcpy(packet->message, message_h, message_h_len);
+        packet->message_len = message_h_len;
 
-        LOG("message_len: %d offsets: %d message: %d packet_offset: %d packet_len: %d\n",
-            message_lens_h[i], message_offsets_h[i], packets_h[i].message[0], packet_offsets_h[i], packet_lens_h[i]);
+        LOG("message_len: %d sig_offset: %d pub_key_offset: %d message_start_offset: %d message_len_offset: %d\n",
+            message_h_len, signature_offset, public_key_offset, message_start_offset, message_len_offset);
     }
 
     int out_size = num_signatures * sizeof(uint8_t);
@@ -75,32 +74,37 @@ int main(int argc, const char* argv[]) {
     LOG("creating seed..\n");
     int ret = ed25519_create_seed(seed_h);
     LOG("create_seed: %d\n", ret);
-    ed25519_create_keypair(packets_h[0].public_key, private_key_h, seed_h);
-    ed25519_sign(packets_h[0].signature, packets_h[0].message, message_h_len, packets_h[0].public_key, private_key_h);
-    ret = ed25519_verify(packets_h[0].signature, message_h, message_h_len, packets_h[0].public_key);
+    packet_t* first_packet_h = (packet_t*)packets_h[0].data;
+    ed25519_create_keypair(first_packet_h->public_key, private_key_h, seed_h);
+    ed25519_sign(first_packet_h->signature, first_packet_h->message, message_h_len, first_packet_h->public_key, private_key_h);
+    ret = ed25519_verify(first_packet_h->signature, message_h, message_h_len, first_packet_h->public_key);
     LOG("verify: %d\n", ret);
 
     for (int i = 1; i < num_signatures; i++) {
-        memcpy(packets_h[i].signature, packets_h[0].signature, SIG_SIZE);
-        memcpy(packets_h[i].public_key, packets_h[0].public_key, PUB_KEY_SIZE);
+        packet_t* packet_h = (packet_t*)packets_h[i].data;
+        memcpy(packet_h->signature, first_packet_h->signature, SIG_SIZE);
+        memcpy(packet_h->public_key, first_packet_h->public_key, PUB_KEY_SIZE);
     }
 
     for (int i = 0; i < num_signatures; i++ ) {
-        unsigned char* sig_ptr = packets_h[i].signature;
-        unsigned char* messages_ptr = packets_h[i].message;
+        packet_t* packet_h = (packet_t*)packets_h[i].data;
+        unsigned char* sig_ptr = packet_h->signature;
+        unsigned char* messages_ptr = packet_h->message;
+        LOG("sig:");
         print_dwords(sig_ptr, SIG_SIZE);
-        LOG("\n");
+        LOG("\nmessage: ");
         print_dwords(messages_ptr, message_h_len);
-        LOG("\n");
+        LOG("\n\n");
     }
     LOG("\n");
 
-    ed25519_verify_many((uint8_t*)&packets_h[0],
-                        &packet_lens_h[0], &packet_offsets_h[0],
-                        &message_lens_h[0], &message_offsets_h[0],
-                        offsetof(packet_t, public_key),
-                        offsetof(packet_t, signature),
-                        num_signatures, out_h);
+    ed25519_verify_many(&elems_h,
+                        1,
+                        public_key_offset,
+                        signature_offset,
+                        message_start_offset,
+                        message_len_offset,
+                        out_h);
 
     LOG("ret:\n");
     bool verify_failed = false;
