@@ -56,6 +56,7 @@ void ED25519_DECLSPEC ed25519_verify_many(const gpu_Elems* elems, uint32_t num, 
 void ED25519_DECLSPEC ed25519_add_scalar(unsigned char *public_key, unsigned char *private_key, const unsigned char *scalar);
 void ED25519_DECLSPEC ed25519_key_exchange(unsigned char *shared_secret, const unsigned char *public_key, const unsigned char *private_key);
 void ED25519_DECLSPEC ed25519_free_gpu_mem();
+void ED25519_DECLSPEC ed25519_set_verbose(bool val);
 
 
 #ifdef __cplusplus

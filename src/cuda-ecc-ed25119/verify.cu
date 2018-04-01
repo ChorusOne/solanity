@@ -138,6 +138,9 @@ static int32_t g_total_gpus = -1;
 static bool g_verbose = false;
 #define LOG(...) if (g_verbose) { printf(__VA_ARGS__); }
 
+void ed25519_set_verbose(bool val) {
+    g_verbose = val;
+}
 
 void ed25519_verify_many(const gpu_Elems* elems,
                          uint32_t num,
@@ -212,7 +215,7 @@ void ed25519_verify_many(const gpu_Elems* elems,
     }
 
     int num_threads_per_block = 64;
-    int num_blocks = (num + num_threads_per_block - 1) / num_threads_per_block;
+    int num_blocks = (cur_ctx->num + num_threads_per_block - 1) / num_threads_per_block;
     LOG("num_blocks: %d threads_per_block: %d keys: %d\n",
            num_blocks, num_threads_per_block, (int)total_packets);
     perftime_t start, end;

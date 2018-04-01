@@ -37,6 +37,8 @@ int main(int argc, const char* argv[]) {
         }
     }
 
+    ed25519_set_verbose(verbose);
+
     int num_signatures = strtol(sig_ptr, NULL, 10);
     if (num_signatures <= 0) {
         printf("num_signatures should be > 0! %d\n", num_signatures);
@@ -54,9 +56,12 @@ int main(int argc, const char* argv[]) {
     uint32_t message_start_offset = offsetof(packet_t, message);
 
     std::vector<streamer_Packet> packets_h = std::vector<streamer_Packet>(num_signatures);
-    gpu_Elems elems_h = {0};
-    elems_h.num = num_signatures;
-    elems_h.elems = &packets_h[0];
+    int num_elems = 2;
+    std::vector<gpu_Elems> elems_h = std::vector<gpu_Elems>(num_elems);
+    for (int i = 0; i < num_elems; i++) {
+        elems_h[i].num = num_signatures;
+        elems_h[i].elems = &packets_h[0];
+    }
 
     LOG("initing signatures..\n");
     for (int i = 0; i < num_signatures; i++) {
@@ -68,7 +73,7 @@ int main(int argc, const char* argv[]) {
             message_h_len, signature_offset, public_key_offset, message_start_offset, message_len_offset);
     }
 
-    int out_size = num_signatures * sizeof(uint8_t);
+    int out_size = num_elems * num_signatures * sizeof(uint8_t);
     uint8_t* out_h = (uint8_t*)calloc(1, out_size);
 
     LOG("creating seed..\n");
@@ -98,25 +103,27 @@ int main(int argc, const char* argv[]) {
     }
     LOG("\n");
 
-    ed25519_verify_many(&elems_h,
-                        1,
-                        public_key_offset,
-                        signature_offset,
-                        message_start_offset,
-                        message_len_offset,
-                        out_h);
+    for (int i = 0; i < 2; i++) {
+        ed25519_verify_many(&elems_h[0],
+                            num_elems,
+                            public_key_offset,
+                            signature_offset,
+                            message_start_offset,
+                            message_len_offset,
+                            out_h);
 
-    LOG("ret:\n");
-    bool verify_failed = false;
-    for (int i = 0; i < out_size / (int)sizeof(uint8_t); i++) {
-        LOG("%x ", out_h[i]);
-        if (out_h[i] != 1) {
-            verify_failed = true;
+        LOG("ret:\n");
+        bool verify_failed = false;
+        for (int i = 0; i < out_size / (int)sizeof(uint8_t); i++) {
+            LOG("%x ", out_h[i]);
+            if (out_h[i] != 1) {
+                verify_failed = true;
+            }
         }
+        LOG("\n");
+        fflush(stdout);
+        assert(verify_failed == false);
     }
-    LOG("\n");
-    fflush(stdout);
-    assert(verify_failed == false);
     ed25519_free_gpu_mem();
     return 0;
 }
