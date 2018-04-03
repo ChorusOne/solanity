@@ -3,6 +3,10 @@
 #include <inttypes.h>
 #include <assert.h>
 #include <vector>
+#include <pthread.h>
+
+#define USE_CLOCK_GETTIME
+#include "perftime.h"
 
 #define LOG(...) if (verbose) { printf(__VA_ARGS__); }
 
@@ -21,29 +25,63 @@ typedef struct {
     uint8_t message[8];
 } packet_t;
 
+typedef struct {
+    gpu_Elems* elems_h;
+    uint32_t num_elems;
+    uint32_t message_start_offset;
+    uint32_t message_len_offset;
+    uint32_t signature_offset;
+    uint32_t public_key_offset;
+    uint8_t* out_h;
+} verify_ctx_t;
+
+static void* verify_proc(void* ctx) {
+    verify_ctx_t* vctx = (verify_ctx_t*)ctx;
+    LOG("sig_offset: %d pub_key_offset: %d message_start_offset: %d message_len_offset: %d\n",
+        vctx->signature_offset, vctx->public_key_offset, vctx->message_start_offset, vctx->message_len_offset);
+    ed25519_verify_many(&vctx->elems_h[0],
+                        vctx->num_elems,
+                        sizeof(streamer_Packet),
+                        vctx->public_key_offset,
+                        vctx->signature_offset,
+                        vctx->message_start_offset,
+                        vctx->message_len_offset,
+                        vctx->out_h);
+    return NULL;
+}
+
 int main(int argc, const char* argv[]) {
-    if (argc != 2 && argc != 3) {
-        printf("usage: %s [-v] <num_signatures>\n", argv[0]);
-        return 1;
-    }
-    const char* sig_ptr = argv[1];
-    if (argc == 3) {
-        if (0 == strcmp(argv[1], "-v")) {
+    int arg;
+    for (arg = 1; arg < argc; arg++) {
+        if (0 == strcmp(argv[arg], "-v")) {
             verbose = true;
-            sig_ptr = argv[2];
         } else {
-            printf("what is this? %s\n", argv[1]);
-            return 1;
+            break;
         }
+    }
+
+    if ((argc - arg) != 2) {
+        printf("usage: %s [-v] <num_signatures> <num_threads>\n", argv[0]);
+        return 1;
     }
 
     ed25519_set_verbose(verbose);
 
-    int num_signatures = strtol(sig_ptr, NULL, 10);
+    int num_signatures = strtol(argv[arg++], NULL, 10);
     if (num_signatures <= 0) {
         printf("num_signatures should be > 0! %d\n", num_signatures);
         return 1;
     }
+
+    int num_threads = strtol(argv[arg++], NULL, 10);
+    if (num_threads <= 0) {
+        printf("num_threads should be > 0! %d\n", num_signatures);
+        return 1;
+    }
+
+    LOG("streamer size: %zu elems size: %zu\n", sizeof(streamer_Packet), sizeof(gpu_Elems));
+
+    std::vector<verify_ctx_t> vctx = std::vector<verify_ctx_t>(num_threads);
 
     // Host allocate
     unsigned char* seed_h = (unsigned char*)calloc(num_signatures * SEED_SIZE, sizeof(uint32_t));
@@ -54,6 +92,13 @@ int main(int argc, const char* argv[]) {
     uint32_t signature_offset = offsetof(packet_t, signature);
     uint32_t public_key_offset = offsetof(packet_t, public_key);
     uint32_t message_start_offset = offsetof(packet_t, message);
+
+    for (int i = 0; i < num_threads; i++) {
+        vctx[i].message_len_offset = message_len_offset;
+        vctx[i].signature_offset = signature_offset;
+        vctx[i].public_key_offset = public_key_offset;
+        vctx[i].message_start_offset = message_start_offset;
+    }
 
     std::vector<streamer_Packet> packets_h = std::vector<streamer_Packet>(num_signatures);
     int num_elems = 2;
@@ -74,7 +119,11 @@ int main(int argc, const char* argv[]) {
     }
 
     int out_size = num_elems * num_signatures * sizeof(uint8_t);
-    uint8_t* out_h = (uint8_t*)calloc(1, out_size);
+    for (int i = 0; i < num_threads; i++) {
+        vctx[i].num_elems = num_elems;
+        vctx[i].out_h = (uint8_t*)calloc(1, out_size);
+        vctx[i].elems_h = &elems_h[0];
+    }
 
     LOG("creating seed..\n");
     int ret = ed25519_create_seed(seed_h);
@@ -103,20 +152,50 @@ int main(int argc, const char* argv[]) {
     }
     LOG("\n");
 
-    for (int i = 0; i < 2; i++) {
-        ed25519_verify_many(&elems_h[0],
-                            num_elems,
-                            public_key_offset,
-                            signature_offset,
-                            message_start_offset,
-                            message_len_offset,
-                            out_h);
+    std::vector<pthread_t> threads = std::vector<pthread_t>(num_threads);
+    pthread_attr_t attr;
+    ret = pthread_attr_init(&attr);
+    if (ret != 0) {
+        LOG("ERROR: pthread_attr_init: %d\n", ret);
+        return 1;
+    }
 
+    perftime_t start, end;
+    get_time(&start);
+    for (int i = 0; i < num_threads; i++) {
+        ret = pthread_create(&threads[i],
+                             &attr,
+                             verify_proc,
+                             &vctx[i]);
+        if (ret != 0) {
+            LOG("ERROR: pthread_create: %d\n", ret);
+            return 1;
+        }
+    }
+
+    void* res = NULL;
+    for (int i = 0; i < num_threads; i++) {
+        ret = pthread_join(threads[i], &res);
+        if (ret != 0) {
+            LOG("ERROR: pthread_join: %d\n", ret);
+            return 1;
+        }
+    }
+    get_time(&end);
+
+    int total = (num_threads * num_signatures * num_elems);
+    double diff = get_diff(&start, &end);
+    printf("time diff: %f total: %d sigs/sec: %f\n",
+           diff,
+           total,
+           (double)total / (diff / 1e6));
+
+    for (int thread = 0; thread < num_threads; thread++) {
         LOG("ret:\n");
         bool verify_failed = false;
         for (int i = 0; i < out_size / (int)sizeof(uint8_t); i++) {
-            LOG("%x ", out_h[i]);
-            if (out_h[i] != 1) {
+            LOG("%x ", vctx[thread].out_h[i]);
+            if (vctx[thread].out_h[i] != 1) {
                 verify_failed = true;
             }
         }

@@ -144,6 +144,7 @@ void ed25519_set_verbose(bool val) {
 
 void ed25519_verify_many(const gpu_Elems* elems,
                          uint32_t num,
+                         uint32_t message_size,
                          uint32_t public_key_offset,
                          uint32_t signature_offset,
                          uint32_t message_start_offset,
@@ -216,8 +217,8 @@ void ed25519_verify_many(const gpu_Elems* elems,
 
     int num_threads_per_block = 64;
     int num_blocks = (cur_ctx->num + num_threads_per_block - 1) / num_threads_per_block;
-    LOG("num_blocks: %d threads_per_block: %d keys: %d\n",
-           num_blocks, num_threads_per_block, (int)total_packets);
+    LOG("num_blocks: %d threads_per_block: %d keys: %d out: %p\n",
+           num_blocks, num_threads_per_block, (int)total_packets, out);
     perftime_t start, end;
     get_time(&start);
     ed25519_verify_kernel<<<num_blocks, num_threads_per_block>>>
