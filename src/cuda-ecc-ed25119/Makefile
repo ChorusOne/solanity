@@ -1,5 +1,5 @@
 
-NVCC:=/usr/local/cuda-9.0/bin/nvcc
+NVCC:=nvcc
 CFLAGS:=--ptxas-options=-v --gpu-architecture=compute_61 -O3 -g -Xcompiler "-Wall -Werror -fPIC"
 LIB:=cuda_verify_ed25519
 
@@ -20,7 +20,7 @@ verify-dlink.o:verify.o
 lib$(LIB).a:verify-dlink.o verify.o
 	$(NVCC) -Xcompiler "-fPIC" --lib --output-file lib$(LIB).a verify-dlink.o verify.o
 
-cuda_ed25519_verify:verify.o.ranlib main.cu lib$(LIB).a
+cuda_ed25519_verify:main.cu lib$(LIB).a
 	$(NVCC) $(CFLAGS) -L. -l$(LIB) main.cu -o cuda_ed25519_verify
 
 .PHONY:clean
