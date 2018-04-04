@@ -138,7 +138,7 @@ static gpu_ctx g_gpu_ctx[MAX_NUM_GPUS][MAX_QUEUE_SIZE] = {0};
 static uint32_t g_cur_gpu = 0;
 static uint32_t g_cur_queue[MAX_NUM_GPUS] = {0};
 static int32_t g_total_gpus = -1;
-static bool g_verbose = true;
+static bool g_verbose = false;
 #define LOG(...) if (g_verbose) { printf(__VA_ARGS__); }
 
 void ed25519_set_verbose(bool val) {
