@@ -129,7 +129,7 @@ typedef struct {
     uint32_t total_packets_len;
 } gpu_ctx;
 
-pthread_mutex_t g_ctx_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_ctx_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 #define MAX_NUM_GPUS 8
 #define MAX_QUEUE_SIZE 8

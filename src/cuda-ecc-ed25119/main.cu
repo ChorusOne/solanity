@@ -112,7 +112,7 @@ int main(int argc, const char* argv[]) {
     for (int i = 0; i < num_signatures; i++) {
         packet_t* packet = (packet_t*)packets_h[i].data;
         memcpy(packet->message, message_h, message_h_len);
-        packet->message_len = message_h_len;
+        packet->message_len = message_h_len + message_start_offset;
 
         LOG("message_len: %d sig_offset: %d pub_key_offset: %d message_start_offset: %d message_len_offset: %d\n",
             message_h_len, signature_offset, public_key_offset, message_start_offset, message_len_offset);
