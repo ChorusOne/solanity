@@ -111,10 +111,13 @@ __global__ void ed25519_verify_kernel(const streamer_Packet* packets,
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < num_keys) {
         const streamer_Packet* packet = &packets[i];
-        out[i] = ed25519_verify_device(&packet->data[signature_offset],
-                                       &packet->data[message_start_offset],
-                                       ((uint32_t*)&packet->data[message_len_offset])[0],
-                                       &packet->data[public_key_offset]);
+        uint32_t message_len = ((uint32_t*)&packet->data[message_len_offset])[0];
+        if (message_len > message_start_offset) {
+            out[i] = ed25519_verify_device(&packet->data[signature_offset],
+                                           &packet->data[message_start_offset],
+                                           message_len - message_start_offset,
+                                           &packet->data[public_key_offset]);
+        }
     }
 }
 
@@ -135,7 +138,7 @@ static gpu_ctx g_gpu_ctx[MAX_NUM_GPUS][MAX_QUEUE_SIZE] = {0};
 static uint32_t g_cur_gpu = 0;
 static uint32_t g_cur_queue[MAX_NUM_GPUS] = {0};
 static int32_t g_total_gpus = -1;
-static bool g_verbose = false;
+static bool g_verbose = true;
 #define LOG(...) if (g_verbose) { printf(__VA_ARGS__); }
 
 void ed25519_set_verbose(bool val) {
@@ -213,12 +216,32 @@ void ed25519_verify_many(const gpu_Elems* elems,
         LOG("i: %zu size: %zu\n", i, elems[i].num * sizeof(streamer_Packet));
         CUDA_CHK(cudaMemcpy(&cur_ctx->packets[cur], elems[i].elems, elems[i].num * sizeof(streamer_Packet), cudaMemcpyHostToDevice));
         cur += elems[i].num;
+
+        uint32_t message_len = ((uint32_t*)&elems[i].elems[0].data[message_len_offset])[0];
+        LOG("message_len: %d\n", message_len);
+
+        for (size_t j = 0; j < message_len; j++) {
+            LOG("%d ", elems[i].elems[0].data[message_start_offset + j]);
+        }
     }
 
     int num_threads_per_block = 64;
     int num_blocks = (total_packets + num_threads_per_block - 1) / num_threads_per_block;
     LOG("num_blocks: %d threads_per_block: %d keys: %d out: %p\n",
            num_blocks, num_threads_per_block, (int)total_packets, out);
+
+    LOG("signature: ");
+    for (int i = 0; i < SIG_SIZE; i++) {
+        LOG("%d ", elems[0].elems[0].data[signature_offset + i]);
+    }
+    LOG("\n");
+
+    LOG("pub_key: ");
+    for (int i = 0; i < PUB_KEY_SIZE; i++) {
+        LOG("%d ", elems[0].elems[0].data[public_key_offset + i]);
+    }
+    LOG("\n");
+
     perftime_t start, end;
     get_time(&start);
     ed25519_verify_kernel<<<num_blocks, num_threads_per_block>>>
@@ -235,7 +258,7 @@ void ed25519_verify_many(const gpu_Elems* elems,
     LOG("time diff: %f\n", get_diff(&start, &end));
 }
 
-void ED25519_DECLSPEC ed25519_free_gpu_mem() {
+void ed25519_free_gpu_mem() {
     for (size_t gpu = 0; gpu < MAX_NUM_GPUS; gpu++) {
         for (size_t queue = 0; queue < MAX_QUEUE_SIZE; queue++) {
             gpu_ctx* cur_ctx = &g_gpu_ctx[gpu][queue];

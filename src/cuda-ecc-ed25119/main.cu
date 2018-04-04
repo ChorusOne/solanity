@@ -101,7 +101,7 @@ int main(int argc, const char* argv[]) {
     }
 
     std::vector<streamer_Packet> packets_h = std::vector<streamer_Packet>(num_signatures);
-    int num_elems = 2;
+    int num_elems = 1;
     std::vector<gpu_Elems> elems_h = std::vector<gpu_Elems>(num_elems);
     for (int i = 0; i < num_elems; i++) {
         elems_h[i].num = num_signatures;

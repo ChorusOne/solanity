@@ -1,11 +1,11 @@
 
 NVCC:=nvcc
-CFLAGS:=--ptxas-options=-v --gpu-architecture=compute_61 -O3 -g -Xcompiler "-Wall -Werror -fPIC"
+CFLAGS:=--ptxas-options=-v --gpu-code=sm_61,compute_61 --gpu-architecture=compute_61 -O3 -g -Xcompiler "-Wall -Werror -fPIC -Wno-strict-aliasing"
 LIB:=cuda_verify_ed25519
 
 all: cuda_ed25519_verify
 
-verify.o:verify.cu seed.cu sha512.cu ge.cu sc.cu fe.cu sign.cu keypair.cu common.cu
+verify.o:verify.cu seed.cu sha512.cu ge.cu sc.cu fe.cu sign.cu keypair.cu common.cu ed25519.h
 	$(NVCC) -rdc=true $(CFLAGS) -c verify.cu -o verify.o
 
 verify.o.ar:verify.o
@@ -20,8 +20,11 @@ verify-dlink.o:verify.o
 lib$(LIB).a:verify-dlink.o verify.o
 	$(NVCC) -Xcompiler "-fPIC" --lib --output-file lib$(LIB).a verify-dlink.o verify.o
 
-cuda_ed25519_verify:main.cu lib$(LIB).a
-	$(NVCC) $(CFLAGS) -L. -l$(LIB) main.cu -o cuda_ed25519_verify
+main.o:main.cu ed25519.h
+	$(NVCC) -rdc=true $(CFLAGS) -c main.cu -o main.o
+
+cuda_ed25519_verify:main.o lib$(LIB).a
+	$(NVCC) $(CFLAGS) -L. -l$(LIB) main.o -o cuda_ed25519_verify
 
 .PHONY:clean
 clean:
