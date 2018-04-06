@@ -1,6 +1,8 @@
 
 NVCC:=nvcc
-CFLAGS:=--ptxas-options=-v --gpu-code=sm_61,compute_61 --gpu-architecture=compute_61 -O3 -g -Xcompiler "-Wall -Werror -fPIC -Wno-strict-aliasing"
+GPU_ARCH=compute_35
+GPU_CFLAGS:=--gpu-code=sm_50,sm_61,$(GPU_ARCH) --gpu-architecture=$(GPU_ARCH)
+CFLAGS:=--ptxas-options=-v $(GPU_CFLAGS) -O3 -g -Xcompiler "-Wall -Werror -fPIC -Wno-strict-aliasing"
 LIB:=cuda_verify_ed25519
 
 all: cuda_ed25519_verify
