@@ -166,6 +166,10 @@ void ed25519_verify_many(const gpu_Elems* elems,
         out_size += elems[i].num * sizeof(uint8_t);
     }
 
+    if (0 == total_packets) {
+        return;
+    }
+
     int32_t cur_gpu, cur_queue;
 
     LOG("device allocate. packets: %d out: %d\n", total_packets_len, (int)out_size);
@@ -217,11 +221,13 @@ void ed25519_verify_many(const gpu_Elems* elems,
         CUDA_CHK(cudaMemcpy(&cur_ctx->packets[cur], elems[i].elems, elems[i].num * sizeof(streamer_Packet), cudaMemcpyHostToDevice));
         cur += elems[i].num;
 
-        uint32_t message_len = ((uint32_t*)&elems[i].elems[0].data[message_len_offset])[0];
-        LOG("message_len: %d\n", message_len);
+        if (elems[i].num > 0) {
+            uint32_t message_len = ((uint32_t*)&elems[i].elems[0].data[message_len_offset])[0];
+            LOG("message_len: %d\n", message_len);
 
-        for (size_t j = 0; j < message_len; j++) {
-            LOG("%d ", elems[i].elems[0].data[message_start_offset + j]);
+            for (size_t j = 0; j < message_len; j++) {
+                LOG("%d ", elems[i].elems[0].data[message_start_offset + j]);
+            }
         }
     }
 
@@ -230,17 +236,19 @@ void ed25519_verify_many(const gpu_Elems* elems,
     LOG("num_blocks: %d threads_per_block: %d keys: %d out: %p\n",
            num_blocks, num_threads_per_block, (int)total_packets, out);
 
-    LOG("signature: ");
-    for (int i = 0; i < SIG_SIZE; i++) {
-        LOG("%d ", elems[0].elems[0].data[signature_offset + i]);
-    }
-    LOG("\n");
+    if (num > 0 && elems[0].num > 0) {
+        LOG("signature: ");
+        for (int i = 0; i < SIG_SIZE; i++) {
+            LOG("%d ", elems[0].elems[0].data[signature_offset + i]);
+        }
+        LOG("\n");
 
-    LOG("pub_key: ");
-    for (int i = 0; i < PUB_KEY_SIZE; i++) {
-        LOG("%d ", elems[0].elems[0].data[public_key_offset + i]);
+        LOG("pub_key: ");
+        for (int i = 0; i < PUB_KEY_SIZE; i++) {
+            LOG("%d ", elems[0].elems[0].data[public_key_offset + i]);
+        }
+        LOG("\n");
     }
-    LOG("\n");
 
     perftime_t start, end;
     get_time(&start);
@@ -252,6 +260,7 @@ void ed25519_verify_many(const gpu_Elems* elems,
                              message_len_offset,
                              cur_ctx->num,
                              cur_ctx->out);
+    CUDA_CHK(cudaPeekAtLastError());
 
     CUDA_CHK(cudaMemcpy(out, cur_ctx->out, out_size, cudaMemcpyDeviceToHost));
     get_time(&end);
