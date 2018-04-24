@@ -14,6 +14,7 @@ jerasure: gf_complete
 
 gf_complete:
 	cd $(GFP_PATH) && \
+	./autogen.sh && \
 	./configure  && \
 	$(MAKE) && export GFP_PATH=$(shell pwd)
 
