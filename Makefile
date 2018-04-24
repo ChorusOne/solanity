@@ -9,6 +9,7 @@ GFP_PATH=$(PWD)/src/gf-complete
 .PHONY: jerasure gf_complete
 jerasure: gf_complete
 	cd src/jerasure && \
+	autoreconf --force --install && \
 	./configure LDFLAGS=-L$(GFP_PATH)/src/.libs/ CPPFLAGS=-I$(GFP_PATH)/include && \
 	$(MAKE)
 
