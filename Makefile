@@ -2,7 +2,7 @@ all: cuda_verify jerasure
 
 .PHONY:cuda_verify
 cuda_verify:
-	$(MAKE) -C src/cuda-ecc-ed25119
+	$(MAKE) V=release -C src/cuda-ecc-ed25119
 
 GFP_PATH=$(PWD)/src/gf-complete
 
