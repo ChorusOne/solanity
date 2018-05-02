@@ -68,11 +68,11 @@ ed25519_verify_device(const unsigned char *signature,
     ge_p2 R;
 
     if (signature[63] & 224) {
-        return 5;
+        return 0;
     }
 
     if (ge_frombytes_negate_vartime(&A, public_key) != 0) {
-        return 3;
+        return 0;
     }
 
     sha512_init(&hash);
