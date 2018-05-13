@@ -109,7 +109,7 @@ void __device__ __host__ fe_add(fe h, const fe f, const fe g) {
     Preconditions: b in {0,1}.
 */
 
-void fe_cmov(fe f, const fe g, unsigned int b) {
+void __host__ __device__ fe_cmov(fe f, const fe g, unsigned int b) {
     int32_t f0 = f[0];
     int32_t f1 = f[1];
     int32_t f2 = f[2];

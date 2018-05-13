@@ -5,6 +5,7 @@
 #include <vector>
 #include <pthread.h>
 #include "gpu_common.h"
+#include "gpu_ctx.h"
 
 #define USE_CLOCK_GETTIME
 #include "perftime.h"
@@ -49,10 +50,11 @@ typedef struct {
     uint8_t* out_h;
     int num_iterations;
     uint8_t use_non_default_stream;
-} verify_ctx_t;
+} verify_cpu_ctx_t;
 
 static void* verify_proc(void* ctx) {
-    verify_ctx_t* vctx = (verify_ctx_t*)ctx;
+    verify_cpu_ctx_t* vctx = (verify_cpu_ctx_t*)ctx;
+    LOG("Start iterations\n");
     for (int i = 0; i < vctx->num_iterations; i++) {
         ed25519_verify_many(&vctx->elems_h[0],
                             vctx->num_elems,
@@ -66,6 +68,7 @@ static void* verify_proc(void* ctx) {
                             vctx->out_h,
                             vctx->use_non_default_stream);
     }
+    LOG("Done iterations\n");
     return NULL;
 }
 
@@ -144,7 +147,7 @@ int main(int argc, const char* argv[]) {
 
     LOG("streamer size: %zu elems size: %zu\n", sizeof(streamer_Packet), sizeof(gpu_Elems));
 
-    std::vector<verify_ctx_t> vctx = std::vector<verify_ctx_t>(num_threads);
+    std::vector<verify_cpu_ctx_t> vctx = std::vector<verify_cpu_ctx_t>(num_threads);
 
     // Host allocate
     unsigned char* seed_h = (unsigned char*)calloc(num_signatures_per_elem * SEED_SIZE, sizeof(uint32_t));

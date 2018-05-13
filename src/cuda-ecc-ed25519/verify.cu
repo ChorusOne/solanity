@@ -1,18 +1,16 @@
 #include "sha512.h"
 #include <algorithm>
 #include <stdio.h>
-#include "ge.cu"
-#include "sc.cu"
+#include "sc.h"
 #include "fe.cu"
-#include "seed.cu"
-#include "keypair.cu"
-#include "sign.cu"
+#include "ge.h"
 #include "sha512.cu"
 
 #include "ed25519.h"
 #include <pthread.h>
 
 #include "gpu_common.h"
+#include "gpu_ctx.h"
 
 #define USE_CLOCK_GETTIME
 #include "perftime.h"
@@ -82,7 +80,7 @@ ed25519_verify_device(const unsigned char *signature,
     sha512_update(&hash, public_key, 32);
     sha512_update(&hash, message, message_len);
     sha512_final(&hash, h);
-    
+
     sc_reduce(h);
     ge_double_scalarmult_vartime(&R, h, &A, signature + 32);
     ge_tobytes(checker, &R);
@@ -125,65 +123,10 @@ __global__ void ed25519_verify_kernel(const uint8_t* packets,
     }
 }
 
-typedef struct {
-    uint8_t* packets;
-    uint8_t* out;
-    uint32_t* public_key_offsets;
-    uint32_t* message_start_offsets;
-    uint32_t* signature_offsets;
-    uint32_t* message_lens;
-
-    size_t num;
-    size_t num_signatures;
-    uint32_t total_packets_len;
-    pthread_mutex_t mutex;
-
-    cudaStream_t stream;
-} gpu_ctx;
-
-static pthread_mutex_t g_ctx_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-#define MAX_NUM_GPUS 8
-#define MAX_QUEUE_SIZE 8
-
-static gpu_ctx g_gpu_ctx[MAX_NUM_GPUS][MAX_QUEUE_SIZE] = {0};
-static uint32_t g_cur_gpu = 0;
-static uint32_t g_cur_queue[MAX_NUM_GPUS] = {0};
-static int32_t g_total_gpus = -1;
 bool g_verbose = false;
 
 void ed25519_set_verbose(bool val) {
     g_verbose = val;
-}
-
-static bool ed25519_init_locked() {
-    if (g_total_gpus == -1) {
-        cudaGetDeviceCount(&g_total_gpus);
-        g_total_gpus = min(MAX_NUM_GPUS, g_total_gpus);
-        LOG("total_gpus: %d\n", g_total_gpus);
-        for (int gpu = 0; gpu < g_total_gpus; gpu++) {
-            CUDA_CHK(cudaSetDevice(gpu));
-            for (int queue = 0; queue < MAX_QUEUE_SIZE; queue++) {
-                int err = pthread_mutex_init(&g_gpu_ctx[gpu][queue].mutex, NULL);
-                if (err != 0) {
-                    fprintf(stderr, "pthread_mutex_init error %d gpu: %d queue: %d\n",
-                            err, gpu, queue);
-                    g_total_gpus = 0;
-                    return false;
-                }
-                CUDA_CHK(cudaStreamCreate(&g_gpu_ctx[gpu][queue].stream));
-            }
-        }
-    }
-    return g_total_gpus > 0;
-}
-
-bool ed25519_init() {
-    cudaFree(0);
-    pthread_mutex_lock(&g_ctx_mutex);
-    bool success = ed25519_init_locked();
-    pthread_mutex_unlock(&g_ctx_mutex);
-    return success;
 }
 
 void ed25519_verify_many(const gpu_Elems* elems,
@@ -202,93 +145,43 @@ void ed25519_verify_many(const gpu_Elems* elems,
         num_elems, total_signatures, total_packets, message_size);
 
     size_t out_size = total_signatures * sizeof(uint8_t);
-    size_t offsets_size = total_signatures * sizeof(uint32_t);
 
-    uint32_t total_packets_len = total_packets * message_size;
+    uint32_t total_packets_size = total_packets * message_size;
 
     if (0 == total_packets) {
         return;
     }
 
-    int32_t cur_gpu, cur_queue;
-
-    LOG("device allocate. packets: %d out: %d offsets_size: %zu\n",
-        total_packets_len, (int)out_size, offsets_size);
     // Device allocate
 
-    pthread_mutex_lock(&g_ctx_mutex);
-    if (!ed25519_init_locked()) {
-        pthread_mutex_unlock(&g_ctx_mutex);
-        LOG("No GPUs, exiting...\n");
-        return;
-    }
-    cur_gpu = g_cur_gpu;
-    g_cur_gpu++;
-    g_cur_gpu %= g_total_gpus;
-    cur_queue = g_cur_queue[cur_gpu];
-    g_cur_queue[cur_gpu]++;
-    g_cur_queue[cur_gpu] %= MAX_QUEUE_SIZE;
-    pthread_mutex_unlock(&g_ctx_mutex);
+    gpu_ctx_t* gpu_ctx = get_gpu_ctx();
 
-    gpu_ctx* cur_ctx = &g_gpu_ctx[cur_gpu][cur_queue];
-    pthread_mutex_lock(&cur_ctx->mutex);
-
-    CUDA_CHK(cudaSetDevice(cur_gpu));
-
-    LOG("cur gpu: %d cur queue: %d\n", cur_gpu, cur_queue);
-
-    if (cur_ctx->packets == NULL ||
-        total_packets_len > cur_ctx->total_packets_len) {
-        CUDA_CHK(cudaFree(cur_ctx->packets));
-        CUDA_CHK(cudaMalloc(&cur_ctx->packets, total_packets_len));
-
-        cur_ctx->total_packets_len = total_packets_len;
-    }
-
-    if (cur_ctx->out == NULL || cur_ctx->num < total_signatures) {
-        CUDA_CHK(cudaFree(cur_ctx->out));
-        CUDA_CHK(cudaMalloc(&cur_ctx->out, out_size));
-
-        cur_ctx->num = total_signatures;
-    }
-
-    if (cur_ctx->public_key_offsets == NULL || cur_ctx->num_signatures < total_signatures) {
-        CUDA_CHK(cudaFree(cur_ctx->public_key_offsets));
-        CUDA_CHK(cudaMalloc(&cur_ctx->public_key_offsets, offsets_size));
-
-        CUDA_CHK(cudaFree(cur_ctx->signature_offsets));
-        CUDA_CHK(cudaMalloc(&cur_ctx->signature_offsets, offsets_size));
-
-        CUDA_CHK(cudaFree(cur_ctx->message_start_offsets));
-        CUDA_CHK(cudaMalloc(&cur_ctx->message_start_offsets, offsets_size));
-
-        CUDA_CHK(cudaFree(cur_ctx->message_lens));
-        CUDA_CHK(cudaMalloc(&cur_ctx->message_lens, offsets_size));
-
-        cur_ctx->num_signatures = total_signatures;
-    }
+    verify_ctx_t* cur_ctx = &gpu_ctx->verify_ctx;
 
     cudaStream_t stream = 0;
     if (0 != use_non_default_stream) {
-        stream = cur_ctx->stream;
+        stream = gpu_ctx->stream;
     }
 
-    CUDA_CHK(cudaMemcpyAsync(cur_ctx->public_key_offsets, public_key_offsets, offsets_size, cudaMemcpyHostToDevice, stream));
-    CUDA_CHK(cudaMemcpyAsync(cur_ctx->signature_offsets, signature_offsets, offsets_size, cudaMemcpyHostToDevice, stream));
-    CUDA_CHK(cudaMemcpyAsync(cur_ctx->message_start_offsets, message_start_offsets, offsets_size, cudaMemcpyHostToDevice, stream));
-    CUDA_CHK(cudaMemcpyAsync(cur_ctx->message_lens, message_lens, offsets_size, cudaMemcpyHostToDevice, stream));
-
-    size_t cur = 0;
-    for (size_t i = 0; i < num_elems; i++) {
-        LOG("i: %zu size: %d\n", i, elems[i].num * message_size);
-        CUDA_CHK(cudaMemcpyAsync(&cur_ctx->packets[cur * message_size], elems[i].elems, elems[i].num * message_size, cudaMemcpyHostToDevice, stream));
-        cur += elems[i].num;
-    }
+    setup_gpu_ctx(cur_ctx,
+                  elems,
+                  num_elems,
+                  message_size,
+                  total_packets,
+                  total_packets_size,
+                  total_signatures,
+                  message_lens,
+                  public_key_offsets,
+                  signature_offsets,
+                  message_start_offsets,
+                  out_size,
+                  stream
+                 );
 
     int num_threads_per_block = 64;
     int num_blocks = ROUND_UP_DIV(total_signatures, num_threads_per_block);
     LOG("num_blocks: %d threads_per_block: %d keys: %d out: %p stream: %p\n",
-           num_blocks, num_threads_per_block, (int)total_packets, out, cur_ctx->stream);
+           num_blocks, num_threads_per_block, (int)total_packets, out, gpu_ctx->stream);
 
     perftime_t start, end;
     get_time(&start);
@@ -299,40 +192,23 @@ void ed25519_verify_many(const gpu_Elems* elems,
                              cur_ctx->public_key_offsets,
                              cur_ctx->signature_offsets,
                              cur_ctx->message_start_offsets,
-                             cur_ctx->num_signatures,
+                             cur_ctx->offsets_len,
                              cur_ctx->out);
     CUDA_CHK(cudaPeekAtLastError());
 
     cudaError_t err = cudaMemcpyAsync(out, cur_ctx->out, out_size, cudaMemcpyDeviceToHost, stream);
     if (err != cudaSuccess)  {
-        fprintf(stderr, "cudaMemcpy(out) error: out = %p cur_ctx->out = %p size = %zu num: %d elems = %p\n",
+        fprintf(stderr, "verify: cudaMemcpy(out) error: out = %p cur_ctx->out = %p size = %zu num: %d elems = %p\n",
                         out, cur_ctx->out, out_size, num_elems, elems);
     }
     CUDA_CHK(err);
 
     CUDA_CHK(cudaStreamSynchronize(stream));
 
-    pthread_mutex_unlock(&cur_ctx->mutex);
+    release_gpu_ctx(gpu_ctx);
 
     get_time(&end);
     LOG("time diff: %f\n", get_diff(&start, &end));
-}
-
-void ed25519_free_gpu_mem() {
-    for (size_t gpu = 0; gpu < MAX_NUM_GPUS; gpu++) {
-        for (size_t queue = 0; queue < MAX_QUEUE_SIZE; queue++) {
-            gpu_ctx* cur_ctx = &g_gpu_ctx[gpu][queue];
-            CUDA_CHK(cudaFree(cur_ctx->packets));
-            CUDA_CHK(cudaFree(cur_ctx->out));
-            CUDA_CHK(cudaFree(cur_ctx->message_lens));
-            CUDA_CHK(cudaFree(cur_ctx->public_key_offsets));
-            CUDA_CHK(cudaFree(cur_ctx->signature_offsets));
-            CUDA_CHK(cudaFree(cur_ctx->message_start_offsets));
-            if (cur_ctx->stream != 0) {
-                CUDA_CHK(cudaStreamDestroy(cur_ctx->stream));
-            }
-        }
-    }
 }
 
 // Ensure copyright and license notice is embedded in the binary

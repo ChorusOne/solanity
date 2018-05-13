@@ -1,9 +1,9 @@
 #
-#  Makefile to build libcuda-crypt.a
+#  Makefile to build libcuda-crypt.so
 #   From sources in /cuda-crypt and /ed25519-verify
 #
-#   nvcc inserts conflicting driver symbols into a static lib (.a)
-#   so more than one .a cannot be linked into a single program.
+#   nvcc inserts conflicting driver symbols into a static lib (.so)
+#   so more than one .so cannot be linked into a single program.
 #   Shared objects with device kernels also did not seem to work--
 #   it can build, but the kernel launch is not successful. (with cuda 9.2)
 #   Hence, build ed25519 ecdsa verify and chacha encryption device
@@ -24,9 +24,38 @@ CFLAGS+=-DENDIAN_NEUTRAL -DLTC_NO_ASM -I$(CUDA_HEADER_DIR) -I$(CUDA_SHA256_DIR)
 all: $V/$(CHACHA_TEST_BIN) $V/$(ECC_TEST_BIN) $(V)/lib$(LIB).so
 
 ECC_DIR:=cuda-ecc-ed25519
-VERIFY_SRCS:=$(addprefix $(ECC_DIR)/,verify.cu seed.cu sha512.cu ge.cu sc.cu fe.cu sign.cu keypair.cu common.cu ed25519.h)
 
+SC_SRCS:=$(addprefix $(ECC_DIR)/,sc.cu ed25519.h ge.h)
+$V/sc.o: $(SC_SRCS)
+	@mkdir -p $(@D)
+	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
+
+KEYPAIR_SRCS:=$(addprefix $(ECC_DIR)/,keypair.cu ed25519.h ge.h)
+$V/keypair.o: $(KEYPAIR_SRCS)
+	@mkdir -p $(@D)
+	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
+
+SEED_SRCS:=$(addprefix $(ECC_DIR)/,seed.cu ed25519.h)
+$V/seed.o: $(SEED_SRCS)
+	@mkdir -p $(@D)
+	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
+
+GE_SRCS:=$(addprefix $(ECC_DIR)/,ge.cu ge.h precomp_data.h)
+$V/ge.o: $(GE_SRCS)
+	@mkdir -p $(@D)
+	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
+
+SIGN_SRCS:=$(addprefix $(ECC_DIR)/,sign.cu sha512.h ge.h sc.h fe.cu ../$(CUDA_HEADER_DIR)/gpu_common.h ed25519.h)
+$V/sign.o: $(SIGN_SRCS)
+	@mkdir -p $(@D)
+	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
+
+VERIFY_SRCS:=$(addprefix $(ECC_DIR)/,verify.cu seed.cu sha512.cu ge.h sc.cu fe.cu keypair.cu common.cu ed25519.h)
 $V/verify.o: $(VERIFY_SRCS)
+	@mkdir -p $(@D)
+	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
+
+$V/gpu_ctx.o: $(addprefix $(ECC_DIR)/,gpu_ctx.cu gpu_ctx.h)
 	@mkdir -p $(@D)
 	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
 
@@ -50,25 +79,30 @@ $V/poh_verify.o: $(POH_SRCS)
 	@mkdir -p $(@D)
 	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
 
-$V/crypt-dlink.o: $V/chacha_cbc.o $V/aes_cbc.o $V/verify.o $V/poh_verify.o
+CPU_GPU_OBJS=$(addprefix $V/,chacha_cbc.o aes_cbc.o verify.o poh_verify.o gpu_ctx.o sign.o ge.o seed.o keypair.o sc.o)
+
+$V/crypt-dlink.o: $(CPU_GPU_OBJS)
 	$(NVCC) -Xcompiler "-fPIC" --gpu-architecture=compute_61 --device-link $^ --output-file $@
 
-$V/lib$(LIB).a: $V/crypt-dlink.o $V/chacha_cbc.o $V/aes_cbc.o $V/verify.o $V/poh_verify.o
-	$(NVCC) -Xcompiler "-fPIC" --lib --output-file $@ $^
-
-$V/lib$(LIB).so: $V/crypt-dlink.o $V/chacha_cbc.o $V/aes_cbc.o $V/verify.o $V/poh_verify.o
+$V/lib$(LIB).so: $V/crypt-dlink.o $(CPU_GPU_OBJS)
 	$(NVCC) -Xcompiler "-fPIC" --shared --output-file $@ $^
 
-$V/$(CHACHA_TEST_BIN): $(CHACHA_DIR)/test.cu $V/lib$(LIB).a
+$V/$(CHACHA_TEST_BIN): $(CHACHA_DIR)/test.cu $V/lib$(LIB).so
 	$(NVCC) $(CFLAGS) -L$V -l$(LIB) $< -o $@
 
 $V/ecc_main.o: $(addprefix $(ECC_DIR)/,main.cu ed25519.h)
 	@mkdir -p $(@D)
 	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
 
-$V/$(ECC_TEST_BIN): $V/ecc_main.o $V/lib$(LIB).a
+$V/$(ECC_TEST_BIN): $V/ecc_main.o $V/lib$(LIB).so
 	$(NVCC) $(CFLAGS) -L$V -l$(LIB) $< -o $@
 
 .PHONY:clean
 clean:
 	rm -rf $V
+
+test: $V/$(ECC_TEST_BIN) $V/$(CHACHA_TEST_BIN)
+	cd $(V) && ./$(CHACHA_TEST_BIN) 64 \
+	cd $(V) && ./$(ECC_TEST_BIN) 1 1 1 1 1 1
+	cd $(V) && ./$(ECC_TEST_BIN) 64 1 1 1 1 0
+	cd $(V) && ./$(ECC_TEST_BIN) 100201 1 1 4 10 1

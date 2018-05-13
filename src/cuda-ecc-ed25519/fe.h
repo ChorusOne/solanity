@@ -25,7 +25,7 @@ void __device__ __host__ fe_tobytes(unsigned char *s, const fe h);
 void __host__ __device__ fe_copy(fe h, const fe f);
 int __host__ __device__ fe_isnegative(const fe f);
 int __device__ __host__ fe_isnonzero(const fe f);
-void fe_cmov(fe f, const fe g, unsigned int b);
+void __host__ __device__ fe_cmov(fe f, const fe g, unsigned int b);
 void fe_cswap(fe f, fe g, unsigned int b);
 
 void __device__ __host__ fe_neg(fe h, const fe f);

@@ -271,7 +271,7 @@ void __host__ __device__ ge_p2_dbl(ge_p1p1 *r, const ge_p2 *p) {
 }
 
 
-void ge_p3_0(ge_p3 *h) {
+void __host__ __device__ ge_p3_0(ge_p3 *h) {
     fe_0(h->X);
     fe_1(h->Y);
     fe_1(h->Z);
@@ -330,7 +330,7 @@ void ge_p3_tobytes(unsigned char *s, const ge_p3 *h) {
 }
 
 
-static unsigned char equal(signed char b, signed char c) {
+static unsigned char __host__ __device__ equal(signed char b, signed char c) {
     unsigned char ub = b;
     unsigned char uc = c;
     unsigned char x = ub ^ uc; /* 0: yes; 1..255: no */
@@ -340,20 +340,20 @@ static unsigned char equal(signed char b, signed char c) {
     return (unsigned char) y;
 }
 
-static unsigned char negative(signed char b) {
+static unsigned char __host__ __device__ negative(signed char b) {
     uint64_t x = b; /* 18446744073709551361..18446744073709551615: yes; 0..255: no */
     x >>= 63; /* 1: yes; 0: no */
     return (unsigned char) x;
 }
 
-static void cmov(ge_precomp *t, const ge_precomp *u, unsigned char b) {
+static void __host__ __device__ cmov(ge_precomp *t, const ge_precomp *u, unsigned char b) {
     fe_cmov(t->yplusx, u->yplusx, b);
     fe_cmov(t->yminusx, u->yminusx, b);
     fe_cmov(t->xy2d, u->xy2d, b);
 }
 
 
-static void select(ge_precomp *t, int pos, signed char b) {
+static void __host__ __device__ select(ge_precomp *t, int pos, signed char b) {
     ge_precomp minust;
     unsigned char bnegative = negative(b);
     unsigned char babs = b - (((-bnegative) & b) << 1);
@@ -383,7 +383,7 @@ Preconditions:
   a[31] <= 127
 */
 
-void ge_scalarmult_base(ge_p3 *h, const unsigned char *a) {
+void __device__ __host__ ge_scalarmult_base(ge_p3 *h, const unsigned char *a) {
     signed char e[64];
     signed char carry;
     ge_p1p1 r;
