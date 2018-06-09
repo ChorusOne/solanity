@@ -1,0 +1,3 @@
+steps:
+  - command: "ci/build.sh"
+    name: "build"
