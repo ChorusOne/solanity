@@ -58,6 +58,7 @@ void ED25519_DECLSPEC ed25519_key_exchange(unsigned char *shared_secret, const u
 void ED25519_DECLSPEC ed25519_free_gpu_mem();
 void ED25519_DECLSPEC ed25519_set_verbose(bool val);
 
+const char* ED25519_DECLSPEC ed25519_license();
 
 #ifdef __cplusplus
 }
