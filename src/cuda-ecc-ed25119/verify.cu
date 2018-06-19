@@ -127,6 +127,7 @@ typedef struct {
 
     size_t num;
     uint32_t total_packets_len;
+    pthread_mutex_t mutex;
 } gpu_ctx;
 
 static pthread_mutex_t g_ctx_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -180,6 +181,16 @@ void ed25519_verify_many(const gpu_Elems* elems,
         cudaGetDeviceCount(&g_total_gpus);
         g_total_gpus = min(8, g_total_gpus);
         LOG("total_gpus: %d\n", g_total_gpus);
+        for (int gpu = 0; gpu < g_total_gpus; gpu++) {
+            for (int queue = 0; queue < MAX_QUEUE_SIZE; queue++) {
+                int err = pthread_mutex_init(&g_gpu_ctx[gpu][queue].mutex, NULL);
+                if (err != 0) {
+                    fprintf(stderr, "pthread_mutex_init error %d gpu: %d queue: %d\n",
+                            err, gpu, queue);
+                    return;
+                }
+            }
+        }
     }
     if (g_total_gpus <= 0) {
         pthread_mutex_unlock(&g_ctx_mutex);
@@ -195,6 +206,7 @@ void ed25519_verify_many(const gpu_Elems* elems,
     pthread_mutex_unlock(&g_ctx_mutex);
 
     gpu_ctx* cur_ctx = &g_gpu_ctx[cur_gpu][cur_queue];
+    pthread_mutex_lock(&cur_ctx->mutex);
 
     cudaSetDevice(cur_gpu);
 
@@ -262,7 +274,15 @@ void ed25519_verify_many(const gpu_Elems* elems,
                              cur_ctx->out);
     CUDA_CHK(cudaPeekAtLastError());
 
-    CUDA_CHK(cudaMemcpy(out, cur_ctx->out, out_size, cudaMemcpyDeviceToHost));
+    cudaError_t err = cudaMemcpy(out, cur_ctx->out, out_size, cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess)  {
+        fprintf(stderr, "cudaMemcpy(out) error: out = %p cur_ctx->out = %p size = %zu num: %d elems = %p\n",
+                        out, cur_ctx->out, out_size, num, elems);
+    }
+    CUDA_CHK(err);
+
+    pthread_mutex_unlock(&cur_ctx->mutex);
+
     get_time(&end);
     LOG("time diff: %f\n", get_diff(&start, &end));
 }
