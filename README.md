@@ -14,7 +14,7 @@ This should generate libcuda\_verify\_ed25519.a
 
 Copy that to the Solana repo:
 
-    cp src/cuda-ecc-ed25519/release/libcuda_verify_ed25519.a $SOLANA_ROOT
+    cp src/cuda-ecc-ed25119/release/libcuda_verify_ed25519.a $SOLANA_ROOT
 
 Build Solana with the cuda feature enabled:
 
