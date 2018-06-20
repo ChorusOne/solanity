@@ -4,6 +4,16 @@ all: cuda_verify jerasure
 cuda_verify:
 	$(MAKE) V=release -C src/cuda-ecc-ed25119
 
+DESTDIR ?= dist
+install:
+	mkdir -p $(DESTDIR)
+	cp -f \
+    ./src/gf-complete/src/.libs/libgf_complete.so \
+    ./src/jerasure/src/.libs/libJerasure.so \
+    ./src/cuda-ecc-ed25119/release/libcuda_verify_ed25519.a \
+    $(DESTDIR)
+	ls -lh $(DESTDIR)
+
 GFP_PATH=$(PWD)/src/gf-complete
 
 .PHONY: jerasure gf_complete
