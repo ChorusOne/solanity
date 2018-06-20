@@ -46,7 +46,6 @@ static void* verify_proc(void* ctx) {
                         vctx->signature_offset,
                         vctx->message_start_offset,
                         vctx->message_len_offset,
-                        sizeof(streamer_Packet),
                         vctx->out_h);
     return NULL;
 }
