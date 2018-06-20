@@ -36,7 +36,7 @@ if [[ ! -r s3cmd-2.0.1/s3cmd ]]; then
   tar zxf s3cmd-2.0.1.tar.gz
 fi
 
-python ./s3cmd-2.0.1/s3cmd put solana-perf.tgz \
+python ./s3cmd-2.0.1/s3cmd --acl-public put solana-perf.tgz \
   s3://solana-perf/$BRANCH/$TOOLCHAIN/solana-perf.tgz
 
 #
