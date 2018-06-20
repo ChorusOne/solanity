@@ -153,13 +153,21 @@ void ed25519_verify_many(const gpu_Elems* elems,
                          uint32_t signature_offset,
                          uint32_t message_start_offset,
                          uint32_t message_len_offset,
+                         uint32_t packet_size,
                          uint8_t* out)
 {
     size_t out_size = 0;
-    LOG("Starting verify_many keys: %d\n", (int)num);
+    LOG("Starting verify_many keys: %d\n message_size: %d message_start_offset: %d\n",
+	(int)num, message_size, message_start_offset);
 
     uint32_t total_packets_len = 0;
     uint32_t total_packets = 0;
+
+    if (packet_size != sizeof(streamer_Packet)) {
+        fprintf(stderr, "cuda packet size (%d) doesn't match passed packet size: (%zu)",
+                        packet_size, sizeof(streamer_Packet));
+        assert(0);
+    }
 
     for (size_t i = 0; i < num; i++) {
         total_packets += elems[i].num;
