@@ -12,6 +12,7 @@ echo --- Build
   make install
 
   cd dist
+  git rev-parse HEAD | tee solana-perf-HEAD.txt
   tar zcvf ../solana-perf.tgz *
 )
 
