@@ -12,6 +12,10 @@ install:
     ./src/jerasure/src/.libs/libJerasure.so \
     ./src/cuda-ecc-ed25119/release/libcuda_verify_ed25519.a \
     $(DESTDIR)
+	ln -sfT libJerasure.so $(DESTDIR)/libJerasure.so.2
+	ln -sfT libJerasure.so $(DESTDIR)/libJerasure.so.2.0.0
+	ln -sfT libgf_complete.so $(DESTDIR)/libgf_complete.so.1.0.0
+	ln -sfT libgf_complete.so $(DESTDIR)/libgf_complete.so.1
 	ls -lh $(DESTDIR)
 
 GFP_PATH=$(PWD)/src/gf-complete
