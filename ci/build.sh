@@ -39,19 +39,4 @@ fi
 python ./s3cmd-2.0.1/s3cmd --acl-public put solana-perf.tgz \
   s3://solana-perf/$BRANCH/$TOOLCHAIN/solana-perf.tgz
 
-#
-# Legacy location.
-# TODO: remove once main Solana README has been updated to reference new location
-#
-
-# this curl command was generated with the s3sign tool
-curl -X PUT -T src/cuda-ecc-ed25119/release/libcuda_verify_ed25519.a \
-  "https://solana-build-artifacts.s3.amazonaws.com/master/libcuda_verify_ed25519.a?AWSAccessKeyId=AKIAIWNK7Q7RADDL6RIA&Expires=1557293882&Signature=auwPpyaCcurrRxxXlhDJp873nkw%3D" -H "Content-Type: application/octet-stream" -H "x-amz-acl: public-read"
-
-curl -X PUT -T src/jerasure/src/.libs/libJerasure.so.2.0.0 \
-  "https://solana-build-artifacts.s3.amazonaws.com/master/libJerasure.so.2.0.0?AWSAccessKeyId=AKIAJBGAJEII7UKJATQQ&Expires=1558815750&Signature=C%2FLJC8yAyqs4ttOW94D8k4OV3pw%3D" -H "Content-Type: application/octet-stream" -H "x-amz-acl: public-read"
-
-curl -X PUT -T src/gf-complete/src/.libs/libgf_complete.so.1.0.0 \
-  "https://solana-build-artifacts.s3.amazonaws.com/master/libgf_complete.so.1.0.0?AWSAccessKeyId=AKIAJBGAJEII7UKJATQQ&Expires=1558815813&Signature=o%2BbwjXoPwjnf6nl%2F5YZ0Dje1dxQ%3D" -H "Content-Type: application/octet-stream" -H "x-amz-acl: public-read"
-
 exit 0
