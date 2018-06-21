@@ -13,6 +13,7 @@ echo --- Build
 
   cd dist
   git rev-parse HEAD | tee solana-perf-HEAD.txt
+  cp -f /usr/local/cuda/version.txt cuda-version.txt
   tar zcvf ../solana-perf.tgz *
 )
 
