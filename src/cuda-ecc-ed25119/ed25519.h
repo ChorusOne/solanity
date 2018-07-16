@@ -60,6 +60,7 @@ void ED25519_DECLSPEC ed25519_free_gpu_mem();
 void ED25519_DECLSPEC ed25519_set_verbose(bool val);
 
 const char* ED25519_DECLSPEC ed25519_license();
+bool ED25519_DECLSPEC ed25519_init();
 
 #ifdef __cplusplus
 }

@@ -146,6 +146,33 @@ void ed25519_set_verbose(bool val) {
     g_verbose = val;
 }
 
+static bool ed25519_init_locked() {
+    if (g_total_gpus == -1) {
+        cudaGetDeviceCount(&g_total_gpus);
+        g_total_gpus = min(8, g_total_gpus);
+        LOG("total_gpus: %d\n", g_total_gpus);
+        for (int gpu = 0; gpu < g_total_gpus; gpu++) {
+            for (int queue = 0; queue < MAX_QUEUE_SIZE; queue++) {
+                int err = pthread_mutex_init(&g_gpu_ctx[gpu][queue].mutex, NULL);
+                if (err != 0) {
+                    fprintf(stderr, "pthread_mutex_init error %d gpu: %d queue: %d\n",
+                            err, gpu, queue);
+                    g_total_gpus = 0;
+                    return false;
+                }
+            }
+        }
+    }
+    return g_total_gpus > 0;
+}
+
+bool ed25519_init() {
+    pthread_mutex_lock(&g_ctx_mutex);
+    bool success = ed25519_init_locked();
+    pthread_mutex_unlock(&g_ctx_mutex);
+    return success;
+}
+
 void ed25519_verify_many(const gpu_Elems* elems,
                          uint32_t num,
                          uint32_t message_size,
@@ -184,22 +211,7 @@ void ed25519_verify_many(const gpu_Elems* elems,
     // Device allocate
 
     pthread_mutex_lock(&g_ctx_mutex);
-    if (g_total_gpus == -1) {
-        cudaGetDeviceCount(&g_total_gpus);
-        g_total_gpus = min(8, g_total_gpus);
-        LOG("total_gpus: %d\n", g_total_gpus);
-        for (int gpu = 0; gpu < g_total_gpus; gpu++) {
-            for (int queue = 0; queue < MAX_QUEUE_SIZE; queue++) {
-                int err = pthread_mutex_init(&g_gpu_ctx[gpu][queue].mutex, NULL);
-                if (err != 0) {
-                    fprintf(stderr, "pthread_mutex_init error %d gpu: %d queue: %d\n",
-                            err, gpu, queue);
-                    return;
-                }
-            }
-        }
-    }
-    if (g_total_gpus <= 0) {
+    if (!ed25519_init_locked()) {
         pthread_mutex_unlock(&g_ctx_mutex);
         LOG("No GPUs, exiting...\n");
         return;
