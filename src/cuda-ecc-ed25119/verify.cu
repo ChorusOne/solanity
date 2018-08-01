@@ -167,6 +167,7 @@ static bool ed25519_init_locked() {
 }
 
 bool ed25519_init() {
+    cudaFree(0);
     pthread_mutex_lock(&g_ctx_mutex);
     bool success = ed25519_init_locked();
     pthread_mutex_unlock(&g_ctx_mutex);
