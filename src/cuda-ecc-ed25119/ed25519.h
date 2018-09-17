@@ -30,7 +30,7 @@ int ED25519_DECLSPEC ed25519_create_seed(unsigned char *seed);
 #define SEED_SIZE 32
 #define SCALAR_SIZE 32
 #define SIG_SIZE 64
-#define PACKET_SIZE 256
+#define PACKET_SIZE 512
 
 typedef struct {
     size_t size;
