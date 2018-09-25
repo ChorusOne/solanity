@@ -10,6 +10,7 @@
 #ifndef HEADER_AES_H
 # define HEADER_AES_H
 
+#include <inttypes.h>
 # include <stddef.h>
 # ifdef  __cplusplus
 extern "C" {
@@ -43,16 +44,23 @@ int AES_set_encrypt_key(const unsigned char *userKey, const int bits,
 int AES_set_decrypt_key(const unsigned char *userKey, const int bits,
                         AES_KEY *key);
 
-void AES_encrypt(const unsigned char *in, unsigned char *out,
+__host__ __device__ void AES_encrypt(const unsigned char *in, unsigned char *out,
                  const AES_KEY *key);
+
 void AES_decrypt(const unsigned char *in, unsigned char *out,
                  const AES_KEY *key);
 
 void AES_ecb_encrypt(const unsigned char *in, unsigned char *out,
                      const AES_KEY *key, const int enc);
+
 void AES_cbc_encrypt(const unsigned char *in, unsigned char *out,
                      size_t length, const AES_KEY *key,
                      unsigned char *ivec, const int enc);
+
+void AES_cbc_encrypt_many(const unsigned char *in, unsigned char *out,
+                          size_t length, const AES_KEY *key,
+                          unsigned char *ivec, uint32_t num_keys, float* time_us);
+
 void AES_cfb128_encrypt(const unsigned char *in, unsigned char *out,
                         size_t length, const AES_KEY *key,
                         unsigned char *ivec, int *num, const int enc);

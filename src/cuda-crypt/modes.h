@@ -31,9 +31,10 @@ typedef void (*ccm128_f) (const unsigned char *in, unsigned char *out,
                           const unsigned char ivec[16],
                           unsigned char cmac[16]);
 
-void CRYPTO_cbc128_encrypt(const unsigned char *in, unsigned char *out,
-                           size_t len, const void *key,
-                           unsigned char ivec[16], block128_f block);
+__host__ __device__ void CRYPTO_cbc128_encrypt(const unsigned char *in, unsigned char *out,
+                           uint32_t len, const void *key,
+                           unsigned char* ivec, const uint32_t* Te3);
+
 void CRYPTO_cbc128_decrypt(const unsigned char *in, unsigned char *out,
                            size_t len, const void *key,
                            unsigned char ivec[16], block128_f block);

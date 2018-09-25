@@ -38,7 +38,13 @@ typedef unsigned char u8;
 #endif
 
 #if !defined(PEDANTIC) && !defined(OPENSSL_NO_ASM) && !defined(OPENSSL_NO_INLINE_ASM)
-# if defined(__GNUC__) && __GNUC__>=2
+
+# if defined(__CUDA_ARCH__)
+#  undef STRICT_ALIGNMENT
+#  define BSWAP4(x) __byte_perm(x, 0, 0x123)
+
+# elif defined(__GNUC__) && __GNUC__>=2
+
 #  if defined(__x86_64) || defined(__x86_64__)
 #   define BSWAP8(x) ({ u64 ret_=(x);                   \
                         asm ("bswapq %0"                \
@@ -71,26 +77,30 @@ typedef unsigned char u8;
                         : "=r"(ret_) : "r"((u32)(x)));  \
                         ret_;                           })
 #  endif
+
 # elif defined(_MSC_VER)
 #  if _MSC_VER>=1300
 #   include <stdlib.h>
 #   pragma intrinsic(_byteswap_uint64,_byteswap_ulong)
 #   define BSWAP8(x)    _byteswap_uint64((u64)(x))
 #   define BSWAP4(x)    _byteswap_ulong((u32)(x))
+
 #  elif defined(_M_IX86)
 __inline u32 _bswap4(u32 val)
 {
 _asm mov eax, val _asm bswap eax}
 #   define BSWAP4(x)    _bswap4(x)
-#  endif
-# endif
+
+#  endif // MSC_VER > 1300
+# endif // def(MSC_VER)
 #endif
+
 #if defined(BSWAP4) && !defined(STRICT_ALIGNMENT)
 # define GETU32(p)       BSWAP4(*(const u32 *)(p))
 # define PUTU32(p,v)     *(u32 *)(p) = BSWAP4(v)
 #else
-# define GETU32(p)       ((u32)(p)[0]<<24|(u32)(p)[1]<<16|(u32)(p)[2]<<8|(u32)(p)[3])
-# define PUTU32(p,v)     ((p)[0]=(u8)((v)>>24),(p)[1]=(u8)((v)>>16),(p)[2]=(u8)((v)>>8),(p)[3]=(u8)(v))
+#  define GETU32(pt) (((u32)(pt)[0] << 24) ^ ((u32)(pt)[1] << 16) ^ ((u32)(pt)[2] <<  8) ^ ((u32)(pt)[3]))
+#  define PUTU32(ct, st) { (ct)[0] = (u8)((st) >> 24); (ct)[1] = (u8)((st) >> 16); (ct)[2] = (u8)((st) >>  8); (ct)[3] = (u8)(st); }
 #endif
 /*- GCM definitions */ typedef struct {
     u64 hi, lo;

@@ -22,13 +22,19 @@
   x[a] = PLUS(x[a],x[b]); x[d] = ROTATE(XOR(x[d],x[a]), 8); \
   x[c] = PLUS(x[c],x[d]); x[b] = ROTATE(XOR(x[b],x[c]), 7);
 
-// sigma contains the ChaCha constants, which happen to be an ASCII string.
-static const uint8_t sigma[16] = { 'e', 'x', 'p', 'a', 'n', 'd', ' ', '3',
-                                   '2', '-', 'b', 'y', 't', 'e', ' ', 'k' };
+#ifdef __CUDA_ARCH__
+#define SIGMA_DEF __device__ __constant__
+#else
+#define SIGMA_DEF
+#endif
 
-static void chacha20_encrypt(unsigned char output[64],
-                             const u32 input[16],
-                             int num_rounds)
+// sigma contains the ChaCha constants, which happen to be an ASCII string.
+static const uint8_t SIGMA_DEF sigma[16] = { 'e', 'x', 'p', 'a', 'n', 'd', ' ', '3',
+                                             '2', '-', 'b', 'y', 't', 'e', ' ', 'k' };
+
+static void __host__ __device__ chacha20_encrypt(const u32 input[16],
+                                                 unsigned char output[64],
+                                                 int num_rounds)
 {
     u32 x[16];
     int i;
@@ -51,10 +57,10 @@ static void chacha20_encrypt(unsigned char output[64],
     }
 }
 
-void chacha20_encrypt_ctr(uint8_t *out, const uint8_t *in, size_t in_len,
-                          const uint8_t key[CHACHA_KEY_SIZE],
-                          const uint8_t nonce[CHACHA_NONCE_SIZE],
-                          uint32_t counter)
+void __host__ __device__ chacha20_ctr_encrypt(const uint8_t *in, uint8_t *out, size_t in_len,
+                                              const uint8_t key[CHACHA_KEY_SIZE],
+                                              const uint8_t nonce[CHACHA_NONCE_SIZE],
+                                              uint32_t counter)
 {
   uint32_t input[16];
   uint8_t buf[64];
@@ -86,7 +92,7 @@ void chacha20_encrypt_ctr(uint8_t *out, const uint8_t *in, size_t in_len,
       todo = in_len;
     }
 
-    chacha20_encrypt(buf, input, 20);
+    chacha20_encrypt(input, buf, CHACHA_ROUNDS);
     for (i = 0; i < todo; i++) {
       out[i] = in[i] ^ buf[i];
     }

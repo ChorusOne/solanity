@@ -1,10 +1,5 @@
 V=debug
-NVCC:=nvcc
-GPU_ARCH=compute_35
-GPU_CFLAGS:=--gpu-code=sm_37,sm_50,sm_61,$(GPU_ARCH) --gpu-architecture=$(GPU_ARCH)
-CFLAGS_release:=--ptxas-options=-v $(GPU_CFLAGS) -O3 -Xcompiler "-Wall -Werror -fPIC -Wno-strict-aliasing"
-CFLAGS_debug:=$(CFLAGS_release) -g
-CFLAGS = $(CFLAGS_$V)
+include ../gpu-common.mk
 LIB:=cuda_verify_ed25519
 
 all: $V/cuda_ed25519_verify
@@ -15,9 +10,6 @@ $V/verify.o: verify.cu seed.cu sha512.cu ge.cu sc.cu fe.cu sign.cu keypair.cu co
 
 $V/verify.o.ar: $V/verify.o
 	ar r lib$(LIB).a $< && touch $@
-
-#$V/verify.o.ranlib: $V/verify.o.ar
-#	ranlib $V/lib$(LIB).a && touch $V/verify.o.ranlib
 
 $V/verify-dlink.o: $V/verify.o
 	$(NVCC) -Xcompiler "-fPIC" --gpu-architecture=compute_61 --device-link $< --output-file $@

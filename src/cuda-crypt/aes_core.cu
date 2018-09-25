@@ -39,8 +39,8 @@
 #include <assert.h>
 
 #include <stdlib.h>
-#include <openssl/crypto.h>
-#include <openssl/aes.h>
+//#include <openssl/crypto.h>
+#include "aes.h"
 #include "aes_locl.h"
 
 #ifndef AES_ASM
@@ -57,7 +57,19 @@ Td3[x] = Si[x].[09, 0d, 0b, 0e];
 Td4[x] = Si[x].[01];
 */
 
-static const u32 Te0[256] = {
+#ifdef __CUDA_ARCH__
+#define TE_DEF __device__ __constant__
+#else
+#define TE_DEF
+#endif
+
+// extract byte from dword
+#define EB0(x)  (x        & 0xff)
+#define EB1(x) ((x >>  8) & 0xff)
+#define EB2(x) ((x >> 16) & 0xff)
+#define EB3(x)  (x >> 24)
+
+static const u32 TE_DEF g_Te0[256] = {
     0xc66363a5U, 0xf87c7c84U, 0xee777799U, 0xf67b7b8dU,
     0xfff2f20dU, 0xd66b6bbdU, 0xde6f6fb1U, 0x91c5c554U,
     0x60303050U, 0x02010103U, 0xce6767a9U, 0x562b2b7dU,
@@ -123,7 +135,7 @@ static const u32 Te0[256] = {
     0x824141c3U, 0x299999b0U, 0x5a2d2d77U, 0x1e0f0f11U,
     0x7bb0b0cbU, 0xa85454fcU, 0x6dbbbbd6U, 0x2c16163aU,
 };
-static const u32 Te1[256] = {
+static const u32 TE_DEF g_Te1[256] = {
     0xa5c66363U, 0x84f87c7cU, 0x99ee7777U, 0x8df67b7bU,
     0x0dfff2f2U, 0xbdd66b6bU, 0xb1de6f6fU, 0x5491c5c5U,
     0x50603030U, 0x03020101U, 0xa9ce6767U, 0x7d562b2bU,
@@ -189,7 +201,7 @@ static const u32 Te1[256] = {
     0xc3824141U, 0xb0299999U, 0x775a2d2dU, 0x111e0f0fU,
     0xcb7bb0b0U, 0xfca85454U, 0xd66dbbbbU, 0x3a2c1616U,
 };
-static const u32 Te2[256] = {
+static const u32 TE_DEF g_Te2[256] = {
     0x63a5c663U, 0x7c84f87cU, 0x7799ee77U, 0x7b8df67bU,
     0xf20dfff2U, 0x6bbdd66bU, 0x6fb1de6fU, 0xc55491c5U,
     0x30506030U, 0x01030201U, 0x67a9ce67U, 0x2b7d562bU,
@@ -255,7 +267,7 @@ static const u32 Te2[256] = {
     0x41c38241U, 0x99b02999U, 0x2d775a2dU, 0x0f111e0fU,
     0xb0cb7bb0U, 0x54fca854U, 0xbbd66dbbU, 0x163a2c16U,
 };
-static const u32 Te3[256] = {
+static const u32 TE_DEF g_Te3[256] = {
     0x6363a5c6U, 0x7c7c84f8U, 0x777799eeU, 0x7b7b8df6U,
     0xf2f20dffU, 0x6b6bbdd6U, 0x6f6fb1deU, 0xc5c55491U,
     0x30305060U, 0x01010302U, 0x6767a9ceU, 0x2b2b7d56U,
@@ -626,6 +638,11 @@ static const u32 rcon[] = {
     0x1B000000, 0x36000000, /* for 128-bit blocks, Rijndael never uses more than 10 rcon values */
 };
 
+#define Te0(x) g_Te0[x]
+#define Te1(x) g_Te1[x]
+#define Te2(x) g_Te2[x]
+#define Te3(x) g_Te3[x]
+
 /**
  * Expand the cipher key into the encryption key schedule.
  */
@@ -659,10 +676,10 @@ int AES_set_encrypt_key(const unsigned char *userKey, const int bits,
         while (1) {
             temp  = rk[3];
             rk[4] = rk[0] ^
-                (Te2[(temp >> 16) & 0xff] & 0xff000000) ^
-                (Te3[(temp >>  8) & 0xff] & 0x00ff0000) ^
-                (Te0[(temp      ) & 0xff] & 0x0000ff00) ^
-                (Te1[(temp >> 24)       ] & 0x000000ff) ^
+                (Te2(EB2(temp)) & 0xff000000) ^
+                (Te3(EB1(temp)) & 0x00ff0000) ^
+                (Te0(EB0(temp)) & 0x0000ff00) ^
+                (Te1(EB3(temp)) & 0x000000ff) ^
                 rcon[i];
             rk[5] = rk[1] ^ rk[4];
             rk[6] = rk[2] ^ rk[5];
@@ -679,10 +696,10 @@ int AES_set_encrypt_key(const unsigned char *userKey, const int bits,
         while (1) {
             temp = rk[ 5];
             rk[ 6] = rk[ 0] ^
-                (Te2[(temp >> 16) & 0xff] & 0xff000000) ^
-                (Te3[(temp >>  8) & 0xff] & 0x00ff0000) ^
-                (Te0[(temp      ) & 0xff] & 0x0000ff00) ^
-                (Te1[(temp >> 24)       ] & 0x000000ff) ^
+                (Te2(EB2(temp)) & 0xff000000) ^
+                (Te3(EB1(temp)) & 0x00ff0000) ^
+                (Te0(EB0(temp)) & 0x0000ff00) ^
+                (Te1(EB3(temp)) & 0x000000ff) ^
                 rcon[i];
             rk[ 7] = rk[ 1] ^ rk[ 6];
             rk[ 8] = rk[ 2] ^ rk[ 7];
@@ -701,10 +718,10 @@ int AES_set_encrypt_key(const unsigned char *userKey, const int bits,
         while (1) {
             temp = rk[ 7];
             rk[ 8] = rk[ 0] ^
-                (Te2[(temp >> 16) & 0xff] & 0xff000000) ^
-                (Te3[(temp >>  8) & 0xff] & 0x00ff0000) ^
-                (Te0[(temp      ) & 0xff] & 0x0000ff00) ^
-                (Te1[(temp >> 24)       ] & 0x000000ff) ^
+                (Te2(EB2(temp)) & 0xff000000) ^
+                (Te3(EB1(temp)) & 0x00ff0000) ^
+                (Te0(EB0(temp)) & 0x0000ff00) ^
+                (Te1(EB3(temp)) & 0x000000ff) ^
                 rcon[i];
             rk[ 9] = rk[ 1] ^ rk[ 8];
             rk[10] = rk[ 2] ^ rk[ 9];
@@ -714,10 +731,10 @@ int AES_set_encrypt_key(const unsigned char *userKey, const int bits,
             }
             temp = rk[11];
             rk[12] = rk[ 4] ^
-                (Te2[(temp >> 24)       ] & 0xff000000) ^
-                (Te3[(temp >> 16) & 0xff] & 0x00ff0000) ^
-                (Te0[(temp >>  8) & 0xff] & 0x0000ff00) ^
-                (Te1[(temp      ) & 0xff] & 0x000000ff);
+                (Te2((temp >> 24)       ) & 0xff000000) ^
+                (Te3((temp >> 16) & 0xff) & 0x00ff0000) ^
+                (Te0((temp >>  8) & 0xff) & 0x0000ff00) ^
+                (Te1((temp      ) & 0xff) & 0x000000ff);
             rk[13] = rk[ 5] ^ rk[12];
             rk[14] = rk[ 6] ^ rk[13];
             rk[15] = rk[ 7] ^ rk[14];
@@ -757,35 +774,55 @@ int AES_set_decrypt_key(const unsigned char *userKey, const int bits,
     for (i = 1; i < (key->rounds); i++) {
         rk += 4;
         rk[0] =
-            Td0[Te1[(rk[0] >> 24)       ] & 0xff] ^
-            Td1[Te1[(rk[0] >> 16) & 0xff] & 0xff] ^
-            Td2[Te1[(rk[0] >>  8) & 0xff] & 0xff] ^
-            Td3[Te1[(rk[0]      ) & 0xff] & 0xff];
+            Td0[Te1((rk[0] >> 24)       ) & 0xff] ^
+            Td1[Te1((rk[0] >> 16) & 0xff) & 0xff] ^
+            Td2[Te1((rk[0] >>  8) & 0xff) & 0xff] ^
+            Td3[Te1((rk[0]      ) & 0xff) & 0xff];
         rk[1] =
-            Td0[Te1[(rk[1] >> 24)       ] & 0xff] ^
-            Td1[Te1[(rk[1] >> 16) & 0xff] & 0xff] ^
-            Td2[Te1[(rk[1] >>  8) & 0xff] & 0xff] ^
-            Td3[Te1[(rk[1]      ) & 0xff] & 0xff];
+            Td0[Te1((rk[1] >> 24)       ) & 0xff] ^
+            Td1[Te1((rk[1] >> 16) & 0xff) & 0xff] ^
+            Td2[Te1((rk[1] >>  8) & 0xff) & 0xff] ^
+            Td3[Te1((rk[1]      ) & 0xff) & 0xff];
         rk[2] =
-            Td0[Te1[(rk[2] >> 24)       ] & 0xff] ^
-            Td1[Te1[(rk[2] >> 16) & 0xff] & 0xff] ^
-            Td2[Te1[(rk[2] >>  8) & 0xff] & 0xff] ^
-            Td3[Te1[(rk[2]      ) & 0xff] & 0xff];
+            Td0[Te1((rk[2] >> 24)       ) & 0xff] ^
+            Td1[Te1((rk[2] >> 16) & 0xff) & 0xff] ^
+            Td2[Te1((rk[2] >>  8) & 0xff) & 0xff] ^
+            Td3[Te1((rk[2]      ) & 0xff) & 0xff];
         rk[3] =
-            Td0[Te1[(rk[3] >> 24)       ] & 0xff] ^
-            Td1[Te1[(rk[3] >> 16) & 0xff] & 0xff] ^
-            Td2[Te1[(rk[3] >>  8) & 0xff] & 0xff] ^
-            Td3[Te1[(rk[3]      ) & 0xff] & 0xff];
+            Td0[Te1((rk[3] >> 24)       ) & 0xff] ^
+            Td1[Te1((rk[3] >> 16) & 0xff) & 0xff] ^
+            Td2[Te1((rk[3] >>  8) & 0xff) & 0xff] ^
+            Td3[Te1((rk[3]      ) & 0xff) & 0xff];
     }
     return 0;
 }
+
+#if 0
+#ifdef __CUDA_ARCH__
+#undef Te0
+#define Te0(x) te[x]
+#undef Te1
+#define Te1(x) BSWAP4(te[x])
+
+#undef Te2
+#define Te2(x) __byte_perm(te[x], 0, 0x3012)
+
+#undef Te3
+#define Te3(x) __byte_perm(te[x], 0, 0x2301)
+#endif
+#endif
+
+#define GEN_TX(d0, d1, d2, d3, rkn) \
+    Te0(EB3(d0)) ^ Te1(EB2(d1)) ^ Te2(EB1(d2)) ^ Te3(EB0(d3)) ^ rk[ rkn]
 
 /*
  * Encrypt a single block
  * in and out can overlap
  */
-void AES_encrypt(const unsigned char *in, unsigned char *out,
-                 const AES_KEY *key) {
+__device__ __host__ void AES_encrypt(const unsigned char *in,
+                                     unsigned char *out,
+                                     const AES_KEY *key,
+                                     const u32* te) {
 
     const u32 *rk;
     u32 s0, s1, s2, s3, t0, t1, t2, t3;
@@ -804,169 +841,186 @@ void AES_encrypt(const unsigned char *in, unsigned char *out,
     s1 = GETU32(in +  4) ^ rk[1];
     s2 = GETU32(in +  8) ^ rk[2];
     s3 = GETU32(in + 12) ^ rk[3];
+
 #ifdef FULL_UNROLL
     /* round 1: */
-    t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >>  8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[ 4];
-    t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >>  8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[ 5];
-    t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >>  8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[ 6];
-    t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >>  8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[ 7];
+    t0 = GEN_TX(s0, s1, s2, s3, 4);
+    t1 = GEN_TX(s1, s2, s3, s0, 5);
+    t2 = GEN_TX(s2, s3, s0, s1, 6);
+    t3 = GEN_TX(s3, s0, s1, s2, 7);
     /* round 2: */
-    s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >>  8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[ 8];
-    s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >>  8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[ 9];
-    s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >>  8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[10];
-    s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >>  8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[11];
+    s0 = GEN_TX(t0, t1, t2, t3, 8);
+    s1 = GEN_TX(t1, t2, t3, t0, 9);
+    s2 = GEN_TX(t2, t3, t0, t1, 10);
+    s3 = GEN_TX(t3, t0, t1, t2, 11);
     /* round 3: */
-    t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >>  8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[12];
-    t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >>  8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[13];
-    t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >>  8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[14];
-    t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >>  8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[15];
+    t0 = GEN_TX(s0, s1, s2, s3, 12);
+    t1 = GEN_TX(s1, s2, s3, s0, 13);
+    t2 = GEN_TX(s2, s3, s0, s1, 14);
+    t3 = GEN_TX(s3, s0, s1, s2, 15);
     /* round 4: */
-    s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >>  8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[16];
-    s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >>  8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[17];
-    s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >>  8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[18];
-    s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >>  8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[19];
+    s0 = GEN_TX(t0, t1, t2, t3, 16);
+    s1 = GEN_TX(t1, t2, t3, t0, 17);
+    s2 = GEN_TX(t2, t3, t0, t1, 18);
+    s3 = GEN_TX(t3, t0, t1, t2, 19);
     /* round 5: */
-    t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >>  8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[20];
-    t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >>  8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[21];
-    t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >>  8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[22];
-    t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >>  8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[23];
+    t0 = GEN_TX(s0, s1, s2, s3, 20);
+    t1 = GEN_TX(s1, s2, s3, s0, 21);
+    t2 = GEN_TX(s2, s3, s0, s1, 22);
+    t3 = GEN_TX(s3, s0, s1, s2, 23);
     /* round 6: */
-    s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >>  8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[24];
-    s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >>  8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[25];
-    s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >>  8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[26];
-    s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >>  8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[27];
+    s0 = GEN_TX(t0, t1, t2, t3, 24);
+    s1 = GEN_TX(t1, t2, t3, t0, 25);
+    s2 = GEN_TX(t2, t3, t0, t1, 26);
+    s3 = GEN_TX(t3, t0, t1, t2, 27);
     /* round 7: */
-    t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >>  8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[28];
-    t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >>  8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[29];
-    t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >>  8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[30];
-    t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >>  8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[31];
+    t0 = GEN_TX(s0, s1, s2, s3, 28);
+    t1 = GEN_TX(s1, s2, s3, s0, 29);
+    t2 = GEN_TX(s2, s3, s0, s1, 30);
+    t3 = GEN_TX(s3, s0, s1, s2, 31);
     /* round 8: */
-    s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >>  8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[32];
-    s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >>  8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[33];
-    s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >>  8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[34];
-    s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >>  8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[35];
+    s0 = GEN_TX(t0, t1, t2, t3, 32);
+    s1 = GEN_TX(t1, t2, t3, t0, 33);
+    s2 = GEN_TX(t2, t3, t0, t1, 34);
+    s3 = GEN_TX(t3, t0, t1, t2, 35);
     /* round 9: */
-    t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >>  8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[36];
-    t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >>  8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[37];
-    t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >>  8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[38];
-    t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >>  8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[39];
+    t0 = GEN_TX(s0, s1, s2, s3, 36);
+    t1 = GEN_TX(s1, s2, s3, s0, 37);
+    t2 = GEN_TX(s2, s3, s0, s1, 38);
+    t3 = GEN_TX(s3, s0, s1, s2, 39);
     if (key->rounds > 10) {
         /* round 10: */
-        s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >>  8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[40];
-        s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >>  8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[41];
-        s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >>  8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[42];
-        s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >>  8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[43];
+        s0 = GEN_TX(t0, t1, t2, t3, 40);
+        s1 = GEN_TX(t1, t2, t3, t0, 41);
+        s2 = GEN_TX(t2, t3, t0, t1, 42);
+        s3 = GEN_TX(t3, t0, t1, t2, 43);
         /* round 11: */
-        t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >>  8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[44];
-        t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >>  8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[45];
-        t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >>  8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[46];
-        t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >>  8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[47];
+        t0 = GEN_TX(s0, s1, s2, s3, 44);
+        t1 = GEN_TX(s1, s2, s3, s0, 45);
+        t2 = GEN_TX(s2, s3, s0, s1, 46);
+        t3 = GEN_TX(s3, s0, s1, s2, 47);
         if (key->rounds > 12) {
             /* round 12: */
-            s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >>  8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[48];
-            s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >>  8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[49];
-            s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >>  8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[50];
-            s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >>  8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[51];
+            s0 = GEN_TX(t0, t1, t2, t3, 48);
+            s1 = GEN_TX(t1, t2, t3, t0, 49);
+            s2 = GEN_TX(t2, t3, t0, t1, 50);
+            s3 = GEN_TX(t3, t0, t1, t2, 51);
             /* round 13: */
-            t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >>  8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[52];
-            t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >>  8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[53];
-            t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >>  8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[54];
-            t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >>  8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[55];
+            t0 = GEN_TX(s0, s1, s2, s3, 52);
+            t1 = GEN_TX(s1, s2, s3, s0, 53);
+            t2 = GEN_TX(s2, s3, s0, s1, 54);
+            t3 = GEN_TX(s3, s0, s1, s2, 55);
         }
     }
     rk += key->rounds << 2;
+
 #else  /* !FULL_UNROLL */
     /*
      * Nr - 1 full rounds:
      */
     r = key->rounds >> 1;
+
     for (;;) {
-        t0 =
-            Te0[(s0 >> 24)       ] ^
-            Te1[(s1 >> 16) & 0xff] ^
-            Te2[(s2 >>  8) & 0xff] ^
-            Te3[(s3      ) & 0xff] ^
-            rk[4];
-        t1 =
-            Te0[(s1 >> 24)       ] ^
-            Te1[(s2 >> 16) & 0xff] ^
-            Te2[(s3 >>  8) & 0xff] ^
-            Te3[(s0      ) & 0xff] ^
-            rk[5];
-        t2 =
-            Te0[(s2 >> 24)       ] ^
-            Te1[(s3 >> 16) & 0xff] ^
-            Te2[(s0 >>  8) & 0xff] ^
-            Te3[(s1      ) & 0xff] ^
-            rk[6];
-        t3 =
-            Te0[(s3 >> 24)       ] ^
-            Te1[(s0 >> 16) & 0xff] ^
-            Te2[(s1 >>  8) & 0xff] ^
-            Te3[(s2      ) & 0xff] ^
-            rk[7];
+
+        /*
+        t0 = GEN_TX(s0, s1, s2, s3, 4);
+        t1 = GEN_TX(s1, s2, s3, s0, 5);
+        t2 = GEN_TX(s2, s3, s0, s1, 6);
+        t3 = GEN_TX(s3, s0, s1, s2, 7);
+        */
+
+        t0 = Te0(EB3(s0));
+        t0 ^= Te1(EB2(s1));
+        t0 ^= Te2(EB1(s2));
+        t0 ^= Te3(EB0(s3));
+        t0 ^= rk[4];
+
+        t1 = Te0(EB3(s1));
+        t1 ^= Te1(EB2(s2));
+        t1 ^= Te2(EB1(s3));
+        t1 ^= Te3(EB0(s0));
+        t1 ^= rk[5];
+
+        t2 = Te0(EB3(s2));
+        t2 ^= Te1(EB2(s3));
+        t2 ^= Te2(EB1(s0));
+        t2 ^= Te3(EB0(s1));
+        t2 ^= rk[6];
+
+        t3 = Te0(EB3(s3));
+        t3 ^= Te1(EB2(s0));
+        t3 ^= Te2(EB1(s1));
+        t3 ^= Te3(EB0(s2));
+        t3 ^= rk[7];
 
         rk += 8;
         if (--r == 0) {
             break;
         }
 
-        s0 =
-            Te0[(t0 >> 24)       ] ^
-            Te1[(t1 >> 16) & 0xff] ^
-            Te2[(t2 >>  8) & 0xff] ^
-            Te3[(t3      ) & 0xff] ^
-            rk[0];
-        s1 =
-            Te0[(t1 >> 24)       ] ^
-            Te1[(t2 >> 16) & 0xff] ^
-            Te2[(t3 >>  8) & 0xff] ^
-            Te3[(t0      ) & 0xff] ^
-            rk[1];
-        s2 =
-            Te0[(t2 >> 24)       ] ^
-            Te1[(t3 >> 16) & 0xff] ^
-            Te2[(t0 >>  8) & 0xff] ^
-            Te3[(t1      ) & 0xff] ^
-            rk[2];
-        s3 =
-            Te0[(t3 >> 24)       ] ^
-            Te1[(t0 >> 16) & 0xff] ^
-            Te2[(t1 >>  8) & 0xff] ^
-            Te3[(t2      ) & 0xff] ^
-            rk[3];
+        /*
+        s0 = GEN_TX(t0, t1, t2, t3, 0);
+        s1 = GEN_TX(t1, t2, t3, t0, 1);
+        s2 = GEN_TX(t2, t3, t0, t1, 2);
+        s3 = GEN_TX(t3, t0, t1, t2, 3);
+        */
+
+        s0 = Te0(EB3(t0));
+        s0 ^= Te1(EB2(t1));
+        s0 ^= Te2(EB1(t2));
+        s0 ^= Te3(EB0(t3));
+        s0 ^= rk[0];
+
+        s1 = Te0(EB3(t1));
+        s1 ^= Te1(EB2(t2));
+        s1 ^= Te2(EB1(t3));
+        s1 ^= Te3(EB0(t0));
+        s1 ^= rk[1];
+
+        s2 = Te0(EB3(t2));
+        s2 ^= Te1(EB2(t3));
+        s2 ^= Te2(EB1(t0));
+        s2 ^= Te3(EB0(t1));
+        s2 ^= rk[2];
+
+        s3 = Te0(EB3(t3));
+        s3 ^= Te1(EB2(t0));
+        s3 ^= Te2(EB1(t1));
+        s3 ^= Te3(EB0(t2));
+        s3 ^= rk[3];
     }
+
 #endif /* ?FULL_UNROLL */
     /*
      * apply last round and
      * map cipher state to byte array block:
      */
     s0 =
-        (Te2[(t0 >> 24)       ] & 0xff000000) ^
-        (Te3[(t1 >> 16) & 0xff] & 0x00ff0000) ^
-        (Te0[(t2 >>  8) & 0xff] & 0x0000ff00) ^
-        (Te1[(t3      ) & 0xff] & 0x000000ff) ^
+        (Te2((t0 >> 24)       ) & 0xff000000) ^
+        (Te3((t1 >> 16) & 0xff) & 0x00ff0000) ^
+        (Te0((t2 >>  8) & 0xff) & 0x0000ff00) ^
+        (Te1((t3      ) & 0xff) & 0x000000ff) ^
         rk[0];
     PUTU32(out     , s0);
     s1 =
-        (Te2[(t1 >> 24)       ] & 0xff000000) ^
-        (Te3[(t2 >> 16) & 0xff] & 0x00ff0000) ^
-        (Te0[(t3 >>  8) & 0xff] & 0x0000ff00) ^
-        (Te1[(t0      ) & 0xff] & 0x000000ff) ^
+        (Te2((t1 >> 24)       ) & 0xff000000) ^
+        (Te3((t2 >> 16) & 0xff) & 0x00ff0000) ^
+        (Te0((t3 >>  8) & 0xff) & 0x0000ff00) ^
+        (Te1((t0      ) & 0xff) & 0x000000ff) ^
         rk[1];
     PUTU32(out +  4, s1);
     s2 =
-        (Te2[(t2 >> 24)       ] & 0xff000000) ^
-        (Te3[(t3 >> 16) & 0xff] & 0x00ff0000) ^
-        (Te0[(t0 >>  8) & 0xff] & 0x0000ff00) ^
-        (Te1[(t1      ) & 0xff] & 0x000000ff) ^
+        (Te2((t2 >> 24)       ) & 0xff000000) ^
+        (Te3((t3 >> 16) & 0xff) & 0x00ff0000) ^
+        (Te0((t0 >>  8) & 0xff) & 0x0000ff00) ^
+        (Te1((t1      ) & 0xff) & 0x000000ff) ^
         rk[2];
     PUTU32(out +  8, s2);
     s3 =
-        (Te2[(t3 >> 24)       ] & 0xff000000) ^
-        (Te3[(t0 >> 16) & 0xff] & 0x00ff0000) ^
-        (Te0[(t1 >>  8) & 0xff] & 0x0000ff00) ^
-        (Te1[(t2      ) & 0xff] & 0x000000ff) ^
+        (Te2((t3 >> 24)       ) & 0xff000000) ^
+        (Te3((t0 >> 16) & 0xff) & 0x00ff0000) ^
+        (Te0((t1 >>  8) & 0xff) & 0x0000ff00) ^
+        (Te1((t2      ) & 0xff) & 0x000000ff) ^
         rk[3];
     PUTU32(out + 12, s3);
 }
