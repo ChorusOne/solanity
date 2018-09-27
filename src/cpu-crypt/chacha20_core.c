@@ -26,9 +26,9 @@
 static const uint8_t sigma[16] = { 'e', 'x', 'p', 'a', 'n', 'd', ' ', '3',
                                    '2', '-', 'b', 'y', 't', 'e', ' ', 'k' };
 
-static void chacha20_encrypt(unsigned char output[64],
-                             const u32 input[16],
-                             int num_rounds)
+void chacha20_encrypt(const u32 input[16],
+                      unsigned char output[64],
+                      int num_rounds)
 {
     u32 x[16];
     int i;
@@ -51,7 +51,7 @@ static void chacha20_encrypt(unsigned char output[64],
     }
 }
 
-void chacha20_encrypt_ctr(uint8_t *out, const uint8_t *in, size_t in_len,
+void chacha20_encrypt_ctr(const uint8_t *in, uint8_t *out, size_t in_len,
                           const uint8_t key[CHACHA_KEY_SIZE],
                           const uint8_t nonce[CHACHA_NONCE_SIZE],
                           uint32_t counter)
@@ -86,7 +86,7 @@ void chacha20_encrypt_ctr(uint8_t *out, const uint8_t *in, size_t in_len,
       todo = in_len;
     }
 
-    chacha20_encrypt(buf, input, 20);
+    chacha20_encrypt(input, buf, 20);
     for (i = 0; i < todo; i++) {
       out[i] = in[i] ^ buf[i];
     }

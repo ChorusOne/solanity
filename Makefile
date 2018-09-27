@@ -1,4 +1,4 @@
-all: cuda_crypt cuda_verify jerasure
+all: cpu_crypt cuda_crypt cuda_verify jerasure
 
 .PHONY:cuda_verify
 cuda_verify:
@@ -8,6 +8,11 @@ cuda_verify:
 cuda_crypt:
 	$(MAKE) V=release -C src/cuda-crypt
 
+.PHONY:cpu_crypt
+cpu_crypt:
+	$(MAKE) V=release -C src/cpu-crypt
+
+
 DESTDIR ?= dist
 install:
 	mkdir -p $(DESTDIR)
@@ -16,6 +21,7 @@ install:
     ./src/jerasure/src/.libs/libJerasure.so \
     ./src/cuda-ecc-ed25119/release/libcuda_verify_ed25519.a \
     ./src/cuda-crypt/release/libcuda-crypt.a \
+    ./src/cpu-crypt/release/libcpu-crypt.a \
     $(DESTDIR)
 	ln -sfT libJerasure.so $(DESTDIR)/libJerasure.so.2
 	ln -sfT libJerasure.so $(DESTDIR)/libJerasure.so.2.0.0
