@@ -20,7 +20,7 @@ install:
     ./src/gf-complete/src/.libs/libgf_complete.so \
     ./src/jerasure/src/.libs/libJerasure.so \
     ./src/cuda-ecc-ed25119/release/libcuda_verify_ed25519.a \
-    ./src/cuda-crypt/release/libcuda-crypt.a \
+    ./src/cuda-crypt/release/libcuda-crypt.so \
     ./src/cpu-crypt/release/libcpu-crypt.a \
     $(DESTDIR)
 	ln -sfT libJerasure.so $(DESTDIR)/libJerasure.so.2

@@ -14,11 +14,14 @@ $V/aes_cbc.o: aes_cbc.cu aes_core.cu modes_lcl.h common.cu
 	@mkdir -p $(@D)
 	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
 
-$V/lib$(LIB).a: $V/aes_cbc.o $V/chacha_cbc.o
-	$(NVCC) -Xcompiler "-fPIC" --lib --output-file $@ $^
+$V/chacha-dlink.o: $V/chacha_cbc.o $V/aes_cbc.o
+	$(NVCC) -Xcompiler "-fPIC" --gpu-architecture=compute_61 --device-link $^ --output-file $@
 
-$V/$(TEST_BIN): test.cu $V/lib$(LIB).a
-	$(NVCC) $(CFLAGS) $^ -o $@
+$V/lib$(LIB).so: $V/chacha-dlink.o $V/chacha_cbc.o $V/aes_cbc.o
+	$(NVCC) -Xcompiler "-fPIC" --shared --output-file $@ $^
+
+$V/$(TEST_BIN): test.cu $V/lib$(LIB).so
+	$(NVCC) $(CFLAGS) -L$V -l$(LIB) $< -o $@
 
 .PHONY:clean
 clean:
