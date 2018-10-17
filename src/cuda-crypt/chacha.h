@@ -11,13 +11,14 @@ extern "C" {
 #define CHACHA_NONCE_SIZE 12
 #define CHACHA_BLOCK_SIZE 64
 #define CHACHA_ROUNDS 500
+#define SAMPLE_SIZE 32
 
 void __host__ __device__ chacha20_ctr_encrypt(const uint8_t *in, uint8_t *out, size_t in_len,
                                               const uint8_t key[CHACHA_KEY_SIZE], const uint8_t nonce[CHACHA_NONCE_SIZE],
                                               uint32_t counter);
 
-void chacha20_cbc_encrypt(const uint8_t *in, uint8_t *out, size_t in_len,
-                          const uint8_t key[CHACHA_KEY_SIZE], uint8_t* ivec);
+void cuda_chacha20_cbc_encrypt(const uint8_t *in, uint8_t *out, size_t in_len,
+                               const uint8_t key[CHACHA_KEY_SIZE], uint8_t* ivec);
 
 void chacha_ctr_encrypt_many(const unsigned char* in, unsigned char* out,
                              size_t length,
@@ -31,6 +32,17 @@ void chacha_cbc_encrypt_many(const unsigned char* in, unsigned char* out,
                              uint8_t* ivec,
                              uint32_t num_keys,
                              float* time_us);
+
+void chacha_cbc_encrypt_many_sample(const unsigned char* in,
+                                    unsigned char* out,
+                                    size_t length,
+                                    const uint8_t *keys,
+                                    uint8_t* ivecs,
+                                    uint32_t num_keys,
+                                    const uint64_t* samples,
+                                    uint32_t num_samples,
+                                    uint64_t starting_block_offset,
+                                    float* time_us);
 
 # ifdef  __cplusplus
 }

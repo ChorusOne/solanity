@@ -191,7 +191,7 @@ void ed25519_verify_many(const gpu_Elems* elems,
     uint32_t total_packets = 0;
 
     if (message_size != sizeof(streamer_Packet)) {
-        fprintf(stderr, "cuda packet size (%d) doesn't match passed packet size: (%zu)",
+        fprintf(stderr, "ERROR: cuda packet size (%d) doesn't match passed packet size: (%zu)\n",
                         message_size, sizeof(streamer_Packet));
         assert(0);
     }

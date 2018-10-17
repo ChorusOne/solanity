@@ -4,7 +4,7 @@
 #ifndef COMMON_CU
 #define COMMON_CU
 
-#define BLOCK_SIZE (64 * 1024)
+#define BLOCK_SIZE (4 * 1024)
 
 #define CUDA_CHK(ans) { cuda_assert((ans), __FILE__, __LINE__); }
 
