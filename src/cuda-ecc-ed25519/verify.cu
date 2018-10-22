@@ -12,6 +12,8 @@
 #include "ed25519.h"
 #include <pthread.h>
 
+#include "gpu_common.h"
+
 #define USE_CLOCK_GETTIME
 #include "perftime.h"
 
@@ -139,8 +141,7 @@ static gpu_ctx g_gpu_ctx[MAX_NUM_GPUS][MAX_QUEUE_SIZE] = {0};
 static uint32_t g_cur_gpu = 0;
 static uint32_t g_cur_queue[MAX_NUM_GPUS] = {0};
 static int32_t g_total_gpus = -1;
-static bool g_verbose = false;
-#define LOG(...) if (g_verbose) { printf(__VA_ARGS__); }
+bool g_verbose = false;
 
 void ed25519_set_verbose(bool val) {
     g_verbose = val;
@@ -264,7 +265,7 @@ void ed25519_verify_many(const gpu_Elems* elems,
     }
 
     int num_threads_per_block = 64;
-    int num_blocks = (total_packets + num_threads_per_block - 1) / num_threads_per_block;
+    int num_blocks = ROUND_UP_DIV(total_packets, num_threads_per_block);
     LOG("num_blocks: %d threads_per_block: %d keys: %d out: %p\n",
            num_blocks, num_threads_per_block, (int)total_packets, out);
 

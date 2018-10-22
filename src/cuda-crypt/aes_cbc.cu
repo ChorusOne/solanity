@@ -14,6 +14,7 @@
 #include "perftime.h"
 #include "modes_lcl.h"
 #include "aes_core.cu"
+#include "gpu_common.h"
 
 #if !defined(STRICT_ALIGNMENT) && !defined(PEDANTIC)
 # define STRICT_ALIGNMENT 0

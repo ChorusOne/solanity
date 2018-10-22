@@ -27,14 +27,14 @@ void chacha_ctr_encrypt_many(const unsigned char* in, unsigned char* out,
                              uint32_t num_keys,
                              float* time_us);
 
-void chacha_cbc_encrypt_many(const unsigned char* in, unsigned char* out,
+void chacha_cbc_encrypt_many(const uint8_t* in, uint8_t* out,
                              size_t length, const uint8_t *keys,
                              uint8_t* ivec,
                              uint32_t num_keys,
                              float* time_us);
 
-void chacha_cbc_encrypt_many_sample(const unsigned char* in,
-                                    unsigned char* out,
+void chacha_cbc_encrypt_many_sample(const uint8_t* in,
+                                    void* out,
                                     size_t length,
                                     const uint8_t *keys,
                                     uint8_t* ivecs,
@@ -43,6 +43,10 @@ void chacha_cbc_encrypt_many_sample(const unsigned char* in,
                                     uint32_t num_samples,
                                     uint64_t starting_block_offset,
                                     float* time_us);
+
+void chacha_end_sha_state(const void* sha_state, uint8_t* out, uint32_t num_keys);
+
+void chacha_init_sha_state(void* sha_state, uint32_t num_keys);
 
 # ifdef  __cplusplus
 }
