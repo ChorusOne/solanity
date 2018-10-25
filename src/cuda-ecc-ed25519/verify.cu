@@ -102,7 +102,8 @@ ed25519_verify(const unsigned char *signature,
     return ed25519_verify_device(signature, message, message_len, public_key);
 }
 
-__global__ void ed25519_verify_kernel(const streamer_Packet* packets,
+__global__ void ed25519_verify_kernel(const uint8_t* packets,
+                                      uint32_t message_size,
                                       uint32_t public_key_offset,
                                       uint32_t signature_offset,
                                       uint32_t message_start_offset,
@@ -112,19 +113,19 @@ __global__ void ed25519_verify_kernel(const streamer_Packet* packets,
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < num_keys) {
-        const streamer_Packet* packet = &packets[i];
-        uint32_t message_len = ((uint32_t*)&packet->data[message_len_offset])[0];
+        const uint8_t* packet = &packets[i * message_size];
+        uint32_t message_len = ((uint32_t*)&packet[message_len_offset])[0];
         if (message_len > message_start_offset) {
-            out[i] = ed25519_verify_device(&packet->data[signature_offset],
-                                           &packet->data[message_start_offset],
+            out[i] = ed25519_verify_device(&packet[signature_offset],
+                                           &packet[message_start_offset],
                                            message_len - message_start_offset,
-                                           &packet->data[public_key_offset]);
+                                           &packet[public_key_offset]);
         }
     }
 }
 
 typedef struct {
-    streamer_Packet* packets;
+    uint8_t* packets;
     uint8_t* out;
 
     size_t num;
@@ -186,20 +187,14 @@ void ed25519_verify_many(const gpu_Elems* elems,
 {
     size_t out_size = 0;
     LOG("Starting verify_many keys: %d\n message_size: %d message_start_offset: %d\n",
-	(int)num, message_size, message_start_offset);
+        (int)num, message_size, message_start_offset);
 
     uint32_t total_packets_len = 0;
     uint32_t total_packets = 0;
 
-    if (message_size != sizeof(streamer_Packet)) {
-        fprintf(stderr, "ERROR: cuda packet size (%d) doesn't match passed packet size: (%zu)\n",
-                        message_size, sizeof(streamer_Packet));
-        assert(0);
-    }
-
     for (size_t i = 0; i < num; i++) {
         total_packets += elems[i].num;
-        total_packets_len += elems[i].num * sizeof(streamer_Packet);
+        total_packets_len += elems[i].num * message_size;
         out_size += elems[i].num * sizeof(uint8_t);
     }
 
@@ -250,17 +245,18 @@ void ed25519_verify_many(const gpu_Elems* elems,
 
     size_t cur = 0;
     for (size_t i = 0; i < num; i++) {
-        LOG("i: %zu size: %zu\n", i, elems[i].num * sizeof(streamer_Packet));
-        CUDA_CHK(cudaMemcpy(&cur_ctx->packets[cur], elems[i].elems, elems[i].num * sizeof(streamer_Packet), cudaMemcpyHostToDevice));
+        LOG("i: %zu size: %d\n", i, elems[i].num * message_size);
+        CUDA_CHK(cudaMemcpy(&cur_ctx->packets[cur * message_size], elems[i].elems, elems[i].num * message_size, cudaMemcpyHostToDevice));
         cur += elems[i].num;
 
         if (elems[i].num > 0) {
-            uint32_t message_len = ((uint32_t*)&elems[i].elems[0].data[message_len_offset])[0];
+            uint32_t message_len = ((uint32_t*)&elems[i].elems[message_len_offset])[0];
             LOG("message_len: %d\n", message_len);
 
             for (size_t j = 0; j < message_len; j++) {
-                LOG("%d ", elems[i].elems[0].data[message_start_offset + j]);
+                LOG("%d ", elems[i].elems[message_start_offset + j]);
             }
+            LOG("\n");
         }
     }
 
@@ -272,13 +268,13 @@ void ed25519_verify_many(const gpu_Elems* elems,
     if (num > 0 && elems[0].num > 0) {
         LOG("signature: ");
         for (int i = 0; i < SIG_SIZE; i++) {
-            LOG("%d ", elems[0].elems[0].data[signature_offset + i]);
+            LOG("%d ", elems[0].elems[signature_offset + i]);
         }
         LOG("\n");
 
         LOG("pub_key: ");
         for (int i = 0; i < PUB_KEY_SIZE; i++) {
-            LOG("%d ", elems[0].elems[0].data[public_key_offset + i]);
+            LOG("%d ", elems[0].elems[public_key_offset + i]);
         }
         LOG("\n");
     }
@@ -287,6 +283,7 @@ void ed25519_verify_many(const gpu_Elems* elems,
     get_time(&start);
     ed25519_verify_kernel<<<num_blocks, num_threads_per_block>>>
                             (cur_ctx->packets,
+                             message_size,
                              public_key_offset,
                              signature_offset,
                              message_start_offset,
@@ -321,6 +318,6 @@ void ed25519_free_gpu_mem() {
 // Ensure copyright and license notice is embedded in the binary
 const char* ed25519_license() {
    return "Copyright (c) 2018 Solana Labs, Inc. "
-	"License AGPLv3: GNU Affero General Public License "
-	"<https://www.gnu.org/licenses/agpl-3.0.html>";
+          "License AGPLv3: GNU Affero General Public License "
+          "<https://www.gnu.org/licenses/agpl-3.0.html>";
 }

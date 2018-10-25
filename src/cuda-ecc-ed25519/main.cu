@@ -10,6 +10,21 @@
 
 #define LOG(...) if (verbose) { printf(__VA_ARGS__); }
 
+#define PACKET_SIZE 512
+
+typedef struct {
+    size_t size;
+    uint64_t num_retransmits;
+    uint16_t addr[8];
+    uint16_t port;
+    bool v6;
+} streamer_Meta;
+
+typedef struct {
+    uint8_t data[PACKET_SIZE];
+    streamer_Meta meta;
+} streamer_Packet;
+
 bool verbose = false;
 
 void print_dwords(unsigned char* ptr, int size) {
@@ -105,7 +120,7 @@ int main(int argc, const char* argv[]) {
     std::vector<gpu_Elems> elems_h = std::vector<gpu_Elems>(num_elems);
     for (int i = 0; i < num_elems; i++) {
         elems_h[i].num = num_signatures;
-        elems_h[i].elems = &packets_h[0];
+        elems_h[i].elems = (uint8_t*)&packets_h[0];
     }
 
     LOG("initing signatures..\n");

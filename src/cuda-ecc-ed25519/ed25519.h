@@ -30,23 +30,9 @@ int ED25519_DECLSPEC ed25519_create_seed(unsigned char *seed);
 #define SEED_SIZE 32
 #define SCALAR_SIZE 32
 #define SIG_SIZE 64
-#define PACKET_SIZE 512
 
 typedef struct {
-    size_t size;
-    uint64_t num_retransmits;
-    uint16_t addr[8];
-    uint16_t port;
-    bool v6;
-} streamer_Meta;
-
-typedef struct {
-    uint8_t data[PACKET_SIZE];
-    streamer_Meta meta;
-} streamer_Packet;
-
-typedef struct {
-    streamer_Packet* elems;
+    uint8_t* elems;
     uint32_t num;
 } gpu_Elems;
 
