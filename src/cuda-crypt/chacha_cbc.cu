@@ -118,7 +118,7 @@ __global__ void chacha20_cbc128_encrypt_sample_kernel(const uint8_t* input,
     size_t i = (size_t)(blockIdx.x * blockDim.x + threadIdx.x);
 
     if (i < num_keys) {
-        uint8_t* t_output = &output[i * length];
+        uint8_t* t_output = &output[i * BLOCK_SIZE];
         cuda_chacha20_cbc128_encrypt(input, t_output, length, &keys[i * CHACHA_KEY_SIZE], &ivec[i * CHACHA_BLOCK_SIZE]);
 
         for (uint32_t j = 0; j < sample_len; j++) {
