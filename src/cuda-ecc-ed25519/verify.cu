@@ -318,6 +318,6 @@ void ed25519_free_gpu_mem() {
 // Ensure copyright and license notice is embedded in the binary
 const char* ed25519_license() {
    return "Copyright (c) 2018 Solana Labs, Inc. "
-          "License AGPLv3: GNU Affero General Public License "
-          "<https://www.gnu.org/licenses/agpl-3.0.html>";
+          "Licensed under the Apache License, Version 2.0 "
+          "<http://www.apache.org/licenses/LICENSE-2.0>";
 }
