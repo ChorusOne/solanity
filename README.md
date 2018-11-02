@@ -1,6 +1,6 @@
 [![Build status](https://badge.buildkite.com/dcc97a44f655a7473ff0f836a2cf154dff016a66db8e4f7405.svg?branch=master)](https://buildkite.com/solana-labs/wool)
 
-# wool
+# solana-perf-libs
 cuda + solana
 
 ## Building
