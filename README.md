@@ -1,7 +1,7 @@
 [![Build status](https://badge.buildkite.com/dcc97a44f655a7473ff0f836a2cf154dff016a66db8e4f7405.svg?branch=master)](https://buildkite.com/solana-labs/wool)
 
 # solana-perf-libs
-cuda + solana
+CUDA, and more!
 
 ## Building
 After cloning this repo use the makefile in the root to build the tree
