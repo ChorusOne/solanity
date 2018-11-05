@@ -11,6 +11,8 @@ echo --- Build
   make V=release -j$(nproc)
   make install
 
+  ci/docker-run.sh solanalabs/sgxsdk ./src/sgx-ecc-ed25519/build.sh
+
   cd dist
   git rev-parse HEAD | tee solana-perf-HEAD.txt
   cp -f /usr/local/cuda/version.txt cuda-version.txt

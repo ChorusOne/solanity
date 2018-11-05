@@ -10,6 +10,7 @@
 #endif
 
 int ed25519_create_seed(unsigned char *seed) {
+#ifndef SGX_COMPAT
 #ifdef _WIN32
     HCRYPTPROV prov;
 
@@ -32,6 +33,7 @@ int ed25519_create_seed(unsigned char *seed) {
 
     fread(seed, 1, 32, f);
     fclose(f);
+#endif
 #endif
 
     return 0;
