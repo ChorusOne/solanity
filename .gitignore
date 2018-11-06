@@ -1,0 +1,6 @@
+# temp folder
+/temp/
+
+# build output folders
+/libs/
+/dist/

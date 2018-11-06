@@ -12,6 +12,7 @@ echo --- Build
   make install
 
   ci/docker-run.sh solanalabs/sgxsdk ./src/sgx-ecc-ed25519/build.sh
+  ci/docker-run.sh solanalabs/sgxsdk ./src/sgx/signing/build.sh
 
   cd dist
   git rev-parse HEAD | tee solana-perf-HEAD.txt

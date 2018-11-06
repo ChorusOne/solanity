@@ -31,11 +31,11 @@ $(NONSGX_OBJ)/%.o: %.c
 
 $(OUT)/libed25519.sgx.static.a: $(SGX_C_Objects)
 	@mkdir -p $(OUT)
-	ar rcs $@ $(SGX_C_Objects)
+	ar rcs $@ $^
 
 $(OUT)/libed25519.static.a: $(NONSGX_C_Objects)
 	@mkdir -p $(OUT)
-	ar rcs $@ $(SGX_C_Objects)
+	ar rcs $@ $^
 
 clean:
 	@rm -rf $(SGX_OBJ) $(NONSGX_OBJ) $(OUT)
