@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sgx_eid.h"
 #include "sgx_error.h"
 
 #define ED25519_PUB_KEY_LEN 32
