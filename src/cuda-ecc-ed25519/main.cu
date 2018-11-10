@@ -43,24 +43,26 @@ typedef struct {
 typedef struct {
     gpu_Elems* elems_h;
     uint32_t num_elems;
-    uint32_t message_start_offset;
-    uint32_t message_len_offset;
-    uint32_t signature_offset;
-    uint32_t public_key_offset;
+    uint32_t total_packets;
+    uint32_t total_signatures;
+    uint32_t* message_lens;
+    uint32_t* public_key_offsets;
+    uint32_t* signature_offsets;
+    uint32_t* message_start_offsets;
     uint8_t* out_h;
 } verify_ctx_t;
 
 static void* verify_proc(void* ctx) {
     verify_ctx_t* vctx = (verify_ctx_t*)ctx;
-    LOG("sig_offset: %d pub_key_offset: %d message_start_offset: %d message_len_offset: %d\n",
-        vctx->signature_offset, vctx->public_key_offset, vctx->message_start_offset, vctx->message_len_offset);
     ed25519_verify_many(&vctx->elems_h[0],
                         vctx->num_elems,
                         sizeof(streamer_Packet),
-                        vctx->public_key_offset,
-                        vctx->signature_offset,
-                        vctx->message_start_offset,
-                        vctx->message_len_offset,
+                        vctx->total_packets,
+                        vctx->total_signatures,
+                        vctx->message_lens,
+                        vctx->public_key_offsets,
+                        vctx->signature_offsets,
+                        vctx->message_start_offsets,
                         vctx->out_h);
     return NULL;
 }
@@ -75,22 +77,34 @@ int main(int argc, const char* argv[]) {
         }
     }
 
-    if ((argc - arg) != 2) {
-        printf("usage: %s [-v] <num_signatures> <num_threads>\n", argv[0]);
+    if ((argc - arg) != 4) {
+        printf("usage: %s [-v] <num_signatures> <num_elems> <num_sigs_per_packet> <num_threads>\n", argv[0]);
         return 1;
     }
 
     ed25519_set_verbose(verbose);
 
-    int num_signatures = strtol(argv[arg++], NULL, 10);
-    if (num_signatures <= 0) {
-        printf("num_signatures should be > 0! %d\n", num_signatures);
+    int num_signatures_per_elem = strtol(argv[arg++], NULL, 10);
+    if (num_signatures_per_elem <= 0) {
+        printf("num_signatures_per_elem should be > 0! %d\n", num_signatures_per_elem);
+        return 1;
+    }
+
+    int num_elems = strtol(argv[arg++], NULL, 10);
+    if (num_elems <= 0) {
+        printf("num_elems should be > 0! %d\n", num_elems);
+        return 1;
+    }
+
+    int num_sigs_per_packet = strtol(argv[arg++], NULL, 10);
+    if (num_sigs_per_packet <= 0) {
+        printf("num_sigs_per_packet should be > 0! %d\n", num_sigs_per_packet);
         return 1;
     }
 
     int num_threads = strtol(argv[arg++], NULL, 10);
     if (num_threads <= 0) {
-        printf("num_threads should be > 0! %d\n", num_signatures);
+        printf("num_threads should be > 0! %d\n", num_threads);
         return 1;
     }
 
@@ -99,45 +113,64 @@ int main(int argc, const char* argv[]) {
     std::vector<verify_ctx_t> vctx = std::vector<verify_ctx_t>(num_threads);
 
     // Host allocate
-    unsigned char* seed_h = (unsigned char*)calloc(num_signatures * SEED_SIZE, sizeof(uint32_t));
-    unsigned char* private_key_h = (unsigned char*)calloc(num_signatures, PRIV_KEY_SIZE);
+    unsigned char* seed_h = (unsigned char*)calloc(num_signatures_per_elem * SEED_SIZE, sizeof(uint32_t));
+    unsigned char* private_key_h = (unsigned char*)calloc(num_signatures_per_elem, PRIV_KEY_SIZE);
     unsigned char message_h[] = "abcd1234";
     int message_h_len = strlen((char*)message_h);
-    uint32_t message_len_offset = offsetof(packet_t, message_len);
-    uint32_t signature_offset = offsetof(packet_t, signature);
-    uint32_t public_key_offset = offsetof(packet_t, public_key);
-    uint32_t message_start_offset = offsetof(packet_t, message);
 
-    for (int i = 0; i < num_threads; i++) {
-        vctx[i].message_len_offset = message_len_offset;
-        vctx[i].signature_offset = signature_offset;
-        vctx[i].public_key_offset = public_key_offset;
-        vctx[i].message_start_offset = message_start_offset;
+    uint32_t total_signatures = num_elems * num_signatures_per_elem;
+    uint32_t* message_lens = (uint32_t*)calloc(total_signatures, sizeof(uint32_t));
+    uint32_t* signature_offsets = (uint32_t*)calloc(total_signatures, sizeof(uint32_t));
+    uint32_t* public_key_offsets = (uint32_t*)calloc(total_signatures, sizeof(uint32_t));
+    uint32_t* message_start_offsets = (uint32_t*)calloc(total_signatures, sizeof(uint32_t));
+
+    for (uint32_t i = 0; i < total_signatures; i++) {
+        uint32_t base_offset = i * sizeof(streamer_Packet);
+        signature_offsets[i] = base_offset + offsetof(packet_t, signature);
+        public_key_offsets[i] = base_offset + offsetof(packet_t, public_key);
+        message_start_offsets[i] = base_offset + offsetof(packet_t, message);
+        message_lens[i] = message_h_len;
     }
 
-    std::vector<streamer_Packet> packets_h = std::vector<streamer_Packet>(num_signatures);
-    int num_elems = 1;
+    for (int i = 0; i < num_threads; i++) {
+        vctx[i].message_lens = message_lens;
+        vctx[i].signature_offsets = signature_offsets;
+        vctx[i].public_key_offsets = public_key_offsets;
+        vctx[i].message_start_offsets = message_start_offsets;
+    }
+
+    std::vector<streamer_Packet> packets_h = std::vector<streamer_Packet>(num_signatures_per_elem);
+    uint32_t total_packets = 0;
+
     std::vector<gpu_Elems> elems_h = std::vector<gpu_Elems>(num_elems);
     for (int i = 0; i < num_elems; i++) {
-        elems_h[i].num = num_signatures;
+        elems_h[i].num = num_signatures_per_elem;
         elems_h[i].elems = (uint8_t*)&packets_h[0];
+
+        total_packets += num_signatures_per_elem;
     }
 
     LOG("initing signatures..\n");
-    for (int i = 0; i < num_signatures; i++) {
+    for (int i = 0; i < num_signatures_per_elem; i++) {
         packet_t* packet = (packet_t*)packets_h[i].data;
         memcpy(packet->message, message_h, message_h_len);
-        packet->message_len = message_h_len + message_start_offset;
 
-        LOG("message_len: %d sig_offset: %d pub_key_offset: %d message_start_offset: %d message_len_offset: %d\n",
-            message_h_len, signature_offset, public_key_offset, message_start_offset, message_len_offset);
+        LOG("message_len: %d\n",
+            message_h_len);
     }
 
-    int out_size = num_elems * num_signatures * sizeof(uint8_t);
+    for (uint32_t i = 0; i < total_signatures; i++) {
+        LOG("sig_offset: %d pub_key_offset: %d message_start_offset: %d message_len: %d\n",
+            signature_offsets[i], public_key_offsets[i], message_start_offsets[i], message_lens[i]);
+    }
+
+    int out_size = total_signatures * sizeof(uint8_t);
     for (int i = 0; i < num_threads; i++) {
         vctx[i].num_elems = num_elems;
         vctx[i].out_h = (uint8_t*)calloc(1, out_size);
         vctx[i].elems_h = &elems_h[0];
+        vctx[i].total_signatures = total_signatures;
+        vctx[i].total_packets = total_packets;
     }
 
     LOG("creating seed..\n");
@@ -149,13 +182,13 @@ int main(int argc, const char* argv[]) {
     ret = ed25519_verify(first_packet_h->signature, message_h, message_h_len, first_packet_h->public_key);
     LOG("verify: %d\n", ret);
 
-    for (int i = 1; i < num_signatures; i++) {
+    for (int i = 1; i < num_signatures_per_elem; i++) {
         packet_t* packet_h = (packet_t*)packets_h[i].data;
         memcpy(packet_h->signature, first_packet_h->signature, SIG_SIZE);
         memcpy(packet_h->public_key, first_packet_h->public_key, PUB_KEY_SIZE);
     }
 
-    for (int i = 0; i < num_signatures; i++ ) {
+    for (int i = 0; i < num_signatures_per_elem; i++ ) {
         packet_t* packet_h = (packet_t*)packets_h[i].data;
         unsigned char* sig_ptr = packet_h->signature;
         unsigned char* messages_ptr = packet_h->message;
@@ -198,7 +231,7 @@ int main(int argc, const char* argv[]) {
     }
     get_time(&end);
 
-    int total = (num_threads * num_signatures * num_elems);
+    int total = (num_threads * total_signatures);
     double diff = get_diff(&start, &end);
     printf("time diff: %f total: %d sigs/sec: %f\n",
            diff,
