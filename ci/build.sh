@@ -3,7 +3,7 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-: "${CUDA_HOME:=/usr/local/cuda-9.2}"
+: "${CUDA_HOME:=/usr/local/cuda-10.0}"
 
 if [[ ! -d $CUDA_HOME/lib64 ]]; then
   echo Invalid CUDA_HOME: $CUDA_HOME
