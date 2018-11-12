@@ -5,6 +5,11 @@ cd "$(dirname "$0")/.."
 
 : "${CUDA_HOME:=/usr/local/cuda-9.2}"
 
+if [[ ! -d $CUDA_HOME/lib64 ]]; then
+  echo Invalid CUDA_HOME: $CUDA_HOME
+  exit 1
+fi
+
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64
 export PATH=$PATH:$HOME/.cargo/bin/:$CUDA_HOME/bin
 
