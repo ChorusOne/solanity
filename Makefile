@@ -1,4 +1,12 @@
-all: cpu_crypt cuda_crypt jerasure
+OS := $(shell uname)
+
+ifeq ($(OS),Darwin)
+SO=dylib
+else
+SO=so
+all: cuda_crypt
+endif
+all: cpu_crypt jerasure
 
 MAKE_ARGS:=V=release
 
@@ -15,15 +23,17 @@ DESTDIR ?= dist
 install:
 	mkdir -p $(DESTDIR)
 	cp -f \
-	./src/gf-complete/src/.libs/libgf_complete.so \
-	./src/jerasure/src/.libs/libJerasure.so \
-	./src/release/libcuda-crypt.a \
-	./src/cpu-crypt/release/libcpu-crypt.a \
-	$(DESTDIR)
+    src/gf-complete/src/.libs/libgf_complete.$(SO) \
+    src/jerasure/src/.libs/libJerasure.$(SO) \
+    src/cpu-crypt/release/libcpu-crypt.a \
+    $(DESTDIR)
+ifneq ($(OS),Darwin)
+	cp -f src/release/libcuda-crypt.a $(DESTDIR)
 	ln -sfT libJerasure.so $(DESTDIR)/libJerasure.so.2
 	ln -sfT libJerasure.so $(DESTDIR)/libJerasure.so.2.0.0
 	ln -sfT libgf_complete.so $(DESTDIR)/libgf_complete.so.1.0.0
 	ln -sfT libgf_complete.so $(DESTDIR)/libgf_complete.so.1
+endif
 	ls -lh $(DESTDIR)
 
 GFP_PATH=$(PWD)/src/gf-complete
