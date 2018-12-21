@@ -17,7 +17,7 @@ This should generate the libraries:
 * libcpu-crypt.a - CPU chacha encryption implementation, used by replicators (storage miners)
 * libJerasure.so, libgf\_complete.so - CPU erasure code library used for coding blob send
 
-Copy the Solana repo:
+Copy libraries to the main Solana repo:
 ```bash
 $ make DESTDIR=${SOLANA_ROOT:?}/target/perf-libs install
 ```
