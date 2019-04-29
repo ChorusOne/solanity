@@ -137,6 +137,8 @@ typedef struct {
     size_t num_signatures;
     uint32_t total_packets_len;
     pthread_mutex_t mutex;
+
+    cudaStream_t stream;
 } gpu_ctx;
 
 static pthread_mutex_t g_ctx_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -157,9 +159,10 @@ void ed25519_set_verbose(bool val) {
 static bool ed25519_init_locked() {
     if (g_total_gpus == -1) {
         cudaGetDeviceCount(&g_total_gpus);
-        g_total_gpus = min(8, g_total_gpus);
+        g_total_gpus = min(MAX_NUM_GPUS, g_total_gpus);
         LOG("total_gpus: %d\n", g_total_gpus);
         for (int gpu = 0; gpu < g_total_gpus; gpu++) {
+            CUDA_CHK(cudaSetDevice(gpu));
             for (int queue = 0; queue < MAX_QUEUE_SIZE; queue++) {
                 int err = pthread_mutex_init(&g_gpu_ctx[gpu][queue].mutex, NULL);
                 if (err != 0) {
@@ -168,6 +171,7 @@ static bool ed25519_init_locked() {
                     g_total_gpus = 0;
                     return false;
                 }
+                CUDA_CHK(cudaStreamCreate(&g_gpu_ctx[gpu][queue].stream));
             }
         }
     }
@@ -191,7 +195,8 @@ void ed25519_verify_many(const gpu_Elems* elems,
                          const uint32_t* public_key_offsets,
                          const uint32_t* signature_offsets,
                          const uint32_t* message_start_offsets,
-                         uint8_t* out)
+                         uint8_t* out,
+                         uint8_t use_non_default_stream)
 {
     LOG("Starting verify_many: num_elems: %d total_signatures: %d total_packets: %d message_size: %d\n",
         num_elems, total_signatures, total_packets, message_size);
@@ -228,7 +233,7 @@ void ed25519_verify_many(const gpu_Elems* elems,
     gpu_ctx* cur_ctx = &g_gpu_ctx[cur_gpu][cur_queue];
     pthread_mutex_lock(&cur_ctx->mutex);
 
-    cudaSetDevice(cur_gpu);
+    CUDA_CHK(cudaSetDevice(cur_gpu));
 
     LOG("cur gpu: %d cur queue: %d\n", cur_gpu, cur_queue);
 
@@ -263,26 +268,31 @@ void ed25519_verify_many(const gpu_Elems* elems,
         cur_ctx->num_signatures = total_signatures;
     }
 
-    CUDA_CHK(cudaMemcpy(cur_ctx->public_key_offsets, public_key_offsets, offsets_size, cudaMemcpyHostToDevice));
-    CUDA_CHK(cudaMemcpy(cur_ctx->signature_offsets, signature_offsets, offsets_size, cudaMemcpyHostToDevice));
-    CUDA_CHK(cudaMemcpy(cur_ctx->message_start_offsets, message_start_offsets, offsets_size, cudaMemcpyHostToDevice));
-    CUDA_CHK(cudaMemcpy(cur_ctx->message_lens, message_lens, offsets_size, cudaMemcpyHostToDevice));
+    cudaStream_t stream = 0;
+    if (0 != use_non_default_stream) {
+        stream = cur_ctx->stream;
+    }
+
+    CUDA_CHK(cudaMemcpyAsync(cur_ctx->public_key_offsets, public_key_offsets, offsets_size, cudaMemcpyHostToDevice, stream));
+    CUDA_CHK(cudaMemcpyAsync(cur_ctx->signature_offsets, signature_offsets, offsets_size, cudaMemcpyHostToDevice, stream));
+    CUDA_CHK(cudaMemcpyAsync(cur_ctx->message_start_offsets, message_start_offsets, offsets_size, cudaMemcpyHostToDevice, stream));
+    CUDA_CHK(cudaMemcpyAsync(cur_ctx->message_lens, message_lens, offsets_size, cudaMemcpyHostToDevice, stream));
 
     size_t cur = 0;
     for (size_t i = 0; i < num_elems; i++) {
         LOG("i: %zu size: %d\n", i, elems[i].num * message_size);
-        CUDA_CHK(cudaMemcpy(&cur_ctx->packets[cur * message_size], elems[i].elems, elems[i].num * message_size, cudaMemcpyHostToDevice));
+        CUDA_CHK(cudaMemcpyAsync(&cur_ctx->packets[cur * message_size], elems[i].elems, elems[i].num * message_size, cudaMemcpyHostToDevice, stream));
         cur += elems[i].num;
     }
 
     int num_threads_per_block = 64;
     int num_blocks = ROUND_UP_DIV(total_signatures, num_threads_per_block);
-    LOG("num_blocks: %d threads_per_block: %d keys: %d out: %p\n",
-           num_blocks, num_threads_per_block, (int)total_packets, out);
+    LOG("num_blocks: %d threads_per_block: %d keys: %d out: %p stream: %p\n",
+           num_blocks, num_threads_per_block, (int)total_packets, out, cur_ctx->stream);
 
     perftime_t start, end;
     get_time(&start);
-    ed25519_verify_kernel<<<num_blocks, num_threads_per_block>>>
+    ed25519_verify_kernel<<<num_blocks, num_threads_per_block, 0, stream>>>
                             (cur_ctx->packets,
                              message_size,
                              cur_ctx->message_lens,
@@ -293,12 +303,14 @@ void ed25519_verify_many(const gpu_Elems* elems,
                              cur_ctx->out);
     CUDA_CHK(cudaPeekAtLastError());
 
-    cudaError_t err = cudaMemcpy(out, cur_ctx->out, out_size, cudaMemcpyDeviceToHost);
+    cudaError_t err = cudaMemcpyAsync(out, cur_ctx->out, out_size, cudaMemcpyDeviceToHost, stream);
     if (err != cudaSuccess)  {
         fprintf(stderr, "cudaMemcpy(out) error: out = %p cur_ctx->out = %p size = %zu num: %d elems = %p\n",
                         out, cur_ctx->out, out_size, num_elems, elems);
     }
     CUDA_CHK(err);
+
+    CUDA_CHK(cudaStreamSynchronize(stream));
 
     pthread_mutex_unlock(&cur_ctx->mutex);
 
@@ -316,6 +328,9 @@ void ed25519_free_gpu_mem() {
             CUDA_CHK(cudaFree(cur_ctx->public_key_offsets));
             CUDA_CHK(cudaFree(cur_ctx->signature_offsets));
             CUDA_CHK(cudaFree(cur_ctx->message_start_offsets));
+            if (cur_ctx->stream != 0) {
+                CUDA_CHK(cudaStreamDestroy(cur_ctx->stream));
+            }
         }
     }
 }
