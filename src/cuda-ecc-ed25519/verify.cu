@@ -245,11 +245,11 @@ void ed25519_verify_many(const gpu_Elems* elems,
         cur_ctx->total_packets_len = total_packets_len;
     }
 
-    if (cur_ctx->out == NULL || cur_ctx->num < total_packets) {
+    if (cur_ctx->out == NULL || cur_ctx->num < total_signatures) {
         CUDA_CHK(cudaFree(cur_ctx->out));
         CUDA_CHK(cudaMalloc(&cur_ctx->out, out_size));
 
-        cur_ctx->num = total_packets;
+        cur_ctx->num = total_signatures;
     }
 
     if (cur_ctx->public_key_offsets == NULL || cur_ctx->num_signatures < total_signatures) {
