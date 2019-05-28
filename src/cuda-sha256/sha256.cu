@@ -14,17 +14,6 @@
 
 #include "tomcrypt_macros.h"
 
-#define SHA256_BLOCK_SIZE 32
-
-struct sha256_state {
-    ulong64 length;
-    ulong32 state[8], curlen;
-    unsigned char buf[64];
-};
-
-typedef struct {
-    struct sha256_state sha256;
-} hash_state;
 
 #ifdef LTC_SMALL_CODE
 /* the K array */

@@ -87,7 +87,7 @@ __global__ void chacha20_cbc128_encrypt_kernel(const unsigned char* input, unsig
     }
 }
 
-#include "sha256.cu"
+#include "sha256.h"
 
 __global__ void init_sha256_state_kernel(hash_state* sha_state, uint32_t num_keys)
 {

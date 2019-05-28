@@ -17,8 +17,9 @@ ECC_TEST_BIN=cuda_ed25519_verify
 LIB=cuda-crypt
 
 CUDA_HEADER_DIR:=cuda-headers
+CUDA_SHA256_DIR:=cuda-sha256
 
-CFLAGS+=-DENDIAN_NEUTRAL -DLTC_NO_ASM -I$(CUDA_HEADER_DIR)
+CFLAGS+=-DENDIAN_NEUTRAL -DLTC_NO_ASM -I$(CUDA_HEADER_DIR) -I$(CUDA_SHA256_DIR)
 
 all: $V/$(CHACHA_TEST_BIN) $V/$(ECC_TEST_BIN)
 
@@ -42,10 +43,17 @@ $V/aes_cbc.o: $(AES_SRCS)
 	@mkdir -p $(@D)
 	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
 
-$V/crypt-dlink.o: $V/chacha_cbc.o $V/aes_cbc.o $V/verify.o
+POH_DIR:=cuda-poh-verify
+POH_SRCS:=$(addprefix $(POH_DIR)/,poh_verify.cu)
+
+$V/poh_verify.o: $(POH_SRCS)
+	@mkdir -p $(@D)
+	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
+
+$V/crypt-dlink.o: $V/chacha_cbc.o $V/aes_cbc.o $V/verify.o $V/poh_verify.o
 	$(NVCC) -Xcompiler "-fPIC" --gpu-architecture=compute_61 --device-link $^ --output-file $@
 
-$V/lib$(LIB).a: $V/crypt-dlink.o $V/chacha_cbc.o $V/aes_cbc.o $V/verify.o
+$V/lib$(LIB).a: $V/crypt-dlink.o $V/chacha_cbc.o $V/aes_cbc.o $V/verify.o $V/poh_verify.o
 	$(NVCC) -Xcompiler "-fPIC" --lib --output-file $@ $^
 
 $V/$(CHACHA_TEST_BIN): $(CHACHA_DIR)/test.cu $V/lib$(LIB).a

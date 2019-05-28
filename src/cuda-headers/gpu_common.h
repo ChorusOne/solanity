@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdio.h>
 
 #ifndef GPU_COMMON_H
 #define GPU_COMMON_H
