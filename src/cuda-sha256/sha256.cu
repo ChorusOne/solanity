@@ -15,6 +15,18 @@
 #include "tomcrypt_macros.h"
 
 
+#define SHA256_BLOCK_SIZE 32
+
+struct sha256_state {
+    ulong64 length;
+    ulong32 state[8], curlen;
+    unsigned char buf[64];
+};
+
+typedef struct {
+    struct sha256_state sha256;
+} hash_state;
+
 #ifdef LTC_SMALL_CODE
 /* the K array */
 static const ulong32 K[64] = {
@@ -183,7 +195,7 @@ static int sha256_compress(hash_state * md, const unsigned char *buf)
    @param md   The hash state you wish to initialize
    @return CRYPT_OK if successful
 */
-int __host__ __device__ sha256_init(hash_state * md)
+inline int __host__ __device__ sha256_init(hash_state * md)
 {
     LTC_ARGCHK(md != NULL);
 
@@ -207,7 +219,7 @@ int __host__ __device__ sha256_init(hash_state * md)
    @param inlen  The length of the data (octets)
    @return CRYPT_OK if successful
 */
-HASH_PROCESS(sha256_process, sha256_compress, sha256, 64)
+inline HASH_PROCESS(sha256_process, sha256_compress, sha256, 64)
 
 /**
    Terminate the hash to get the digest
@@ -215,7 +227,7 @@ HASH_PROCESS(sha256_process, sha256_compress, sha256, 64)
    @param out [out] The destination of the hash (32 bytes)
    @return CRYPT_OK if successful
 */
-int __host__ __device__ sha256_done(hash_state * md, unsigned char *out)
+inline int __host__ __device__ sha256_done(hash_state * md, unsigned char *out)
 {
     int i;
 

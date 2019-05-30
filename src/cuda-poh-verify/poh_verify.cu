@@ -2,7 +2,7 @@
 #include <inttypes.h>
 #include <pthread.h>
 #include "gpu_common.h"
-#include "sha256.h"
+#include "sha256.cu"
 
 #define MAX_NUM_GPUS 8
 #define MAX_QUEUE_SIZE 8
@@ -72,14 +72,10 @@ bool poh_init() {
     return success;
 }
 
-// This function locks the pthreads mutex for the gpu context it takes
-// for the computation. `poh_finish_verify_many` must be called with the
-// returned gpu_ctx to avoid poisoning the mutex. This structure allows
-// the host to complete calculations concurrently with the gpu calculations.
-gpu_ctx* poh_start_verify_many(const uint8_t* hashes,
-                                     const uint64_t* num_hashes_arr,
-                                     size_t num_elems,
-                                     uint8_t use_non_default_stream)
+int poh_verify_many(const uint8_t* hashes,
+                          const uint64_t* num_hashes_arr,
+                          size_t num_elems,
+                          uint8_t use_non_default_stream)
 {
     LOG("Starting poh_verify_many: num_elems: %zu\n", num_elems);
 
@@ -89,7 +85,7 @@ gpu_ctx* poh_start_verify_many(const uint8_t* hashes,
     if (!poh_init_locked()) {
         pthread_mutex_unlock(&g_ctx_mutex);
         LOG("No GPUs, exiting...\n");
-        return NULL;
+        return 1;
     }
     cur_gpu = g_cur_gpu;
     g_cur_gpu++;
@@ -132,20 +128,11 @@ gpu_ctx* poh_start_verify_many(const uint8_t* hashes,
     poh_verify_kernel<<<num_blocks, NUM_THREADS_PER_BLOCK, 0, stream>>>(cur_ctx->hashes, cur_ctx->num_hashes_arr, num_elems);
     CUDA_CHK(cudaPeekAtLastError());
 
-    return cur_ctx;
-}
-
-void poh_finish_verify_many(uint8_t* hashes, size_t num_elems, gpu_ctx* cur_ctx, uint8_t use_non_default_stream) {
-    cudaStream_t stream = 0;
-    if (0 != use_non_default_stream) {
-        stream = cur_ctx->stream;
-    }
-
-    size_t hashes_size = num_elems * SHA256_BLOCK_SIZE * sizeof(uint8_t);
-
-    CUDA_CHK(cudaMemcpyAsync(hashes, cur_ctx->hashes, hashes_size, cudaMemcpyDeviceToHost, stream));
+    CUDA_CHK(cudaMemcpyAsync((void*)hashes, cur_ctx->hashes, hashes_size, cudaMemcpyDeviceToHost, stream));
 
     CUDA_CHK(cudaStreamSynchronize(stream));
 
     pthread_mutex_unlock(&cur_ctx->mutex);
+
+    return 0;
 }
