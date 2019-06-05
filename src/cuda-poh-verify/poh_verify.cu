@@ -72,12 +72,15 @@ bool poh_init() {
     return success;
 }
 
+extern "C" {
 int poh_verify_many(const uint8_t* hashes,
                           const uint64_t* num_hashes_arr,
                           size_t num_elems,
                           uint8_t use_non_default_stream)
 {
     LOG("Starting poh_verify_many: num_elems: %zu\n", num_elems);
+
+    if (num_elems == 0) return 0;
 
     int32_t cur_gpu, cur_queue;
 
@@ -135,4 +138,5 @@ int poh_verify_many(const uint8_t* hashes,
     pthread_mutex_unlock(&cur_ctx->mutex);
 
     return 0;
+}
 }
