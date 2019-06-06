@@ -73,10 +73,10 @@ bool poh_init() {
 }
 
 extern "C" {
-int poh_verify_many(const uint8_t* hashes,
-                          const uint64_t* num_hashes_arr,
-                          size_t num_elems,
-                          uint8_t use_non_default_stream)
+int poh_verify_many(uint8_t* hashes,
+                    const uint64_t* num_hashes_arr,
+                    size_t num_elems,
+                    uint8_t use_non_default_stream)
 {
     LOG("Starting poh_verify_many: num_elems: %zu\n", num_elems);
 
@@ -131,7 +131,7 @@ int poh_verify_many(const uint8_t* hashes,
     poh_verify_kernel<<<num_blocks, NUM_THREADS_PER_BLOCK, 0, stream>>>(cur_ctx->hashes, cur_ctx->num_hashes_arr, num_elems);
     CUDA_CHK(cudaPeekAtLastError());
 
-    CUDA_CHK(cudaMemcpyAsync((void*)hashes, cur_ctx->hashes, hashes_size, cudaMemcpyDeviceToHost, stream));
+    CUDA_CHK(cudaMemcpyAsync(hashes, cur_ctx->hashes, hashes_size, cudaMemcpyDeviceToHost, stream));
 
     CUDA_CHK(cudaStreamSynchronize(stream));
 
