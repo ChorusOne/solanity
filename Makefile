@@ -6,7 +6,7 @@ else
 SO=so
 all: cuda_crypt
 endif
-all: cpu_crypt jerasure
+all: jerasure
 
 MAKE_ARGS:=V=release
 
@@ -14,18 +14,12 @@ MAKE_ARGS:=V=release
 cuda_crypt:
 	$(MAKE) $(MAKE_ARGS) -C src
 
-.PHONY:cpu_crypt
-cpu_crypt:
-	$(MAKE) $(MAKE_ARGS) -C src/cpu-crypt
-
-
 DESTDIR ?= dist
 install:
 	mkdir -p $(DESTDIR)
 	cp -f \
     src/gf-complete/src/.libs/libgf_complete.$(SO) \
     src/jerasure/src/.libs/libJerasure.$(SO) \
-    src/cpu-crypt/release/libcpu-crypt.a \
     $(DESTDIR)
 ifneq ($(OS),Darwin)
 	cp -f src/release/libcuda-crypt.a $(DESTDIR)
@@ -55,6 +49,5 @@ gf_complete:
 .PHONY:clean
 clean:
 	$(MAKE) $(MAKE_ARGS) -C src clean
-	$(MAKE) $(MAKE_ARGS) -C src/cpu-crypt clean
 	$(MAKE) -C $(JERASURE_PATH) clean
 	$(MAKE) -C $(GFP_PATH) clean
