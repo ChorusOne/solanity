@@ -21,7 +21,7 @@ CUDA_SHA256_DIR:=cuda-sha256
 
 CFLAGS+=-DENDIAN_NEUTRAL -DLTC_NO_ASM -I$(CUDA_HEADER_DIR) -I$(CUDA_SHA256_DIR)
 
-all: $V/$(CHACHA_TEST_BIN) $V/$(ECC_TEST_BIN)
+all: $V/$(CHACHA_TEST_BIN) $V/$(ECC_TEST_BIN) $(V)/lib$(LIB).so
 
 ECC_DIR:=cuda-ecc-ed25519
 VERIFY_SRCS:=$(addprefix $(ECC_DIR)/,verify.cu seed.cu sha512.cu ge.cu sc.cu fe.cu sign.cu keypair.cu common.cu ed25519.h)
@@ -55,6 +55,9 @@ $V/crypt-dlink.o: $V/chacha_cbc.o $V/aes_cbc.o $V/verify.o $V/poh_verify.o
 
 $V/lib$(LIB).a: $V/crypt-dlink.o $V/chacha_cbc.o $V/aes_cbc.o $V/verify.o $V/poh_verify.o
 	$(NVCC) -Xcompiler "-fPIC" --lib --output-file $@ $^
+
+$V/lib$(LIB).so: $V/crypt-dlink.o $V/chacha_cbc.o $V/aes_cbc.o $V/verify.o $V/poh_verify.o
+	$(NVCC) -Xcompiler "-fPIC" --lib --shared --output-file $@ $^
 
 $V/$(CHACHA_TEST_BIN): $(CHACHA_DIR)/test.cu $V/lib$(LIB).a
 	$(NVCC) $(CFLAGS) -L$V -l$(LIB) $< -o $@
