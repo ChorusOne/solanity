@@ -5,12 +5,17 @@ cd "$(dirname "$0")/.."
 source ci/env.sh
 source ci/upload-ci-artifact.sh
 
-for CUDA_HOME in /usr/local/cuda-10.0 /usr/local/cuda-10.1; do
-  CUDA_HOME_BASE=$(basename $CUDA_HOME)
+CUDA_HOMES=(
+  /usr/local/cuda-10.0
+  /usr/local/cuda-10.1
+)
+
+for CUDA_HOME in "${CUDA_HOMES[@]}"; do
+  CUDA_HOME_BASE="$(basename "$CUDA_HOME")"
   echo "--- Build: $CUDA_HOME_BASE"
   (
     if [[ ! -d $CUDA_HOME/lib64 ]]; then
-      echo Invalid CUDA_HOME: $CUDA_HOME
+      echo "Invalid CUDA_HOME: $CUDA_HOME"
       exit 1
     fi
 
@@ -23,7 +28,7 @@ for CUDA_HOME in /usr/local/cuda-10.0 /usr/local/cuda-10.1; do
     make install
     make clean
 
-    cp -vf $CUDA_HOME/version.txt "$DESTDIR"/cuda-version.txt
+    cp -vf "$CUDA_HOME"/version.txt "$DESTDIR"/cuda-version.txt
   )
 done
 

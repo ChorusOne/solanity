@@ -18,7 +18,6 @@ DESTDIR ?= dist
 install:
 	mkdir -p $(DESTDIR)
 ifneq ($(OS),Darwin)
-	cp -f src/$(V)/libcuda-crypt.a $(DESTDIR)
 	cp -f src/$(V)/libcuda-crypt.so $(DESTDIR)
 endif
 	ls -lh $(DESTDIR)

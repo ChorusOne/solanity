@@ -57,7 +57,7 @@ $V/lib$(LIB).a: $V/crypt-dlink.o $V/chacha_cbc.o $V/aes_cbc.o $V/verify.o $V/poh
 	$(NVCC) -Xcompiler "-fPIC" --lib --output-file $@ $^
 
 $V/lib$(LIB).so: $V/crypt-dlink.o $V/chacha_cbc.o $V/aes_cbc.o $V/verify.o $V/poh_verify.o
-	$(NVCC) -Xcompiler "-fPIC" --lib --shared --output-file $@ $^
+	$(NVCC) -Xcompiler "-fPIC" --shared --output-file $@ $^
 
 $V/$(CHACHA_TEST_BIN): $(CHACHA_DIR)/test.cu $V/lib$(LIB).a
 	$(NVCC) $(CFLAGS) -L$V -l$(LIB) $< -o $@
