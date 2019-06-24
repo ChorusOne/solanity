@@ -48,6 +48,9 @@ void ED25519_DECLSPEC ed25519_set_verbose(bool val);
 const char* ED25519_DECLSPEC ed25519_license();
 bool ED25519_DECLSPEC ed25519_init();
 
+int cuda_host_register(void* ptr, size_t size, unsigned int flags);
+int cuda_host_unregister(void* ptr);
+
 #ifdef __cplusplus
 }
 #endif

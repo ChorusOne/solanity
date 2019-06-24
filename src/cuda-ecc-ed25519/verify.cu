@@ -341,3 +341,11 @@ const char* ed25519_license() {
           "Licensed under the Apache License, Version 2.0 "
           "<http://www.apache.org/licenses/LICENSE-2.0>";
 }
+
+int cuda_host_register(void* ptr, size_t size, unsigned int flags) {
+   return cudaHostRegister(ptr, size, flags);
+}
+
+int cuda_host_unregister(void* ptr) {
+   return cudaHostUnregister(ptr);
+}
