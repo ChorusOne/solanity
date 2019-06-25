@@ -13,9 +13,7 @@ $ make -j$(nproc)
 ```
 
 This should generate the libraries:
-* libcuda-crypt.a - ed25519 verify (used by leaders) and chacha (used by validators) cuda implementations
-* libcpu-crypt.a - CPU chacha encryption implementation, used by replicators (storage miners)
-* libJerasure.so, libgf\_complete.so - CPU erasure code library used for coding blob send
+* libcuda-crypt.so - ed25519 verify (used by leaders) and chacha (used by validators) cuda implementations
 
 Copy libraries to the main Solana repo:
 ```bash
@@ -25,5 +23,5 @@ $ make DESTDIR=${SOLANA_ROOT:?}/target/perf-libs install
 Build Solana with the performance features enabled:
 ```bash
 $ cd $SOLANA_ROOT
-$ cargo build --release --features=cuda,chacha,erasure
+$ cargo build --release --features=cuda
 ```
