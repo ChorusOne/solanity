@@ -1,9 +1,9 @@
 #include "sha512.h"
 #include <algorithm>
 #include <stdio.h>
-#include "sc.h"
+#include "sc.cu"
 #include "fe.cu"
-#include "ge.h"
+#include "ge.cu"
 #include "sha512.cu"
 
 #include "ed25519.h"

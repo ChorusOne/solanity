@@ -25,11 +25,6 @@ all: $V/$(CHACHA_TEST_BIN) $V/$(ECC_TEST_BIN) $(V)/lib$(LIB).so
 
 ECC_DIR:=cuda-ecc-ed25519
 
-SC_SRCS:=$(addprefix $(ECC_DIR)/,sc.cu ed25519.h ge.h)
-$V/sc.o: $(SC_SRCS)
-	@mkdir -p $(@D)
-	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
-
 KEYPAIR_SRCS:=$(addprefix $(ECC_DIR)/,keypair.cu ed25519.h ge.h)
 $V/keypair.o: $(KEYPAIR_SRCS)
 	@mkdir -p $(@D)
@@ -40,17 +35,12 @@ $V/seed.o: $(SEED_SRCS)
 	@mkdir -p $(@D)
 	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
 
-GE_SRCS:=$(addprefix $(ECC_DIR)/,ge.cu ge.h precomp_data.h)
-$V/ge.o: $(GE_SRCS)
-	@mkdir -p $(@D)
-	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
-
 SIGN_SRCS:=$(addprefix $(ECC_DIR)/,sign.cu sha512.h ge.h sc.h fe.cu ../$(CUDA_HEADER_DIR)/gpu_common.h ed25519.h)
 $V/sign.o: $(SIGN_SRCS)
 	@mkdir -p $(@D)
 	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
 
-VERIFY_SRCS:=$(addprefix $(ECC_DIR)/,verify.cu seed.cu sha512.cu ge.h sc.cu fe.cu keypair.cu common.cu ed25519.h)
+VERIFY_SRCS:=$(addprefix $(ECC_DIR)/,verify.cu sha512.cu ge.cu sc.cu fe.cu keypair.cu common.cu ed25519.h)
 $V/verify.o: $(VERIFY_SRCS)
 	@mkdir -p $(@D)
 	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
@@ -79,10 +69,10 @@ $V/poh_verify.o: $(POH_SRCS)
 	@mkdir -p $(@D)
 	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
 
-CPU_GPU_OBJS=$(addprefix $V/,chacha_cbc.o aes_cbc.o verify.o poh_verify.o gpu_ctx.o sign.o ge.o seed.o keypair.o sc.o)
+CPU_GPU_OBJS=$(addprefix $V/,chacha_cbc.o aes_cbc.o verify.o poh_verify.o gpu_ctx.o sign.o seed.o keypair.o)
 
 $V/crypt-dlink.o: $(CPU_GPU_OBJS)
-	$(NVCC) -Xcompiler "-fPIC" --gpu-architecture=compute_61 --device-link $^ --output-file $@
+	$(NVCC) -Xcompiler "-fPIC" $(CFLAGS) --device-link $^ --output-file $@
 
 $V/lib$(LIB).so: $V/crypt-dlink.o $(CPU_GPU_OBJS)
 	$(NVCC) -Xcompiler "-fPIC" --shared --output-file $@ $^
