@@ -65,8 +65,8 @@ void vanity_setup(config &vanity) {
 		int blockSize       = 0,
 		    minGridSize     = 0,
 		    maxActiveBlocks = 0;
-		cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, vanity_init, 0, 0);
-		cudaOccupancyMaxActiveBlocksPerMultiprocessor(&maxActiveBlocks, vanity_init, blockSize, 0);
+		cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, vanity_scan, 0, 0);
+		cudaOccupancyMaxActiveBlocksPerMultiprocessor(&maxActiveBlocks, vanity_scan, blockSize, 0);
 
 		// Output Device Details
 		// 
@@ -96,7 +96,7 @@ void vanity_setup(config &vanity) {
 			device.maxGridSize[2]
 		);
 
-		cudaMalloc((void **)&(vanity.states[i]), 4 * 512 * sizeof(curandState));
+		cudaMalloc((void **)&(vanity.states[i]), maxActiveBlocks * blockSize * sizeof(curandState));
 		vanity_init<<<maxActiveBlocks, blockSize>>>(vanity.states[i]);
 	}
 
@@ -119,7 +119,6 @@ void vanity_run(config &vanity) {
 			    maxActiveBlocks = 0;
 			cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, vanity_scan, 0, 0);
 			cudaOccupancyMaxActiveBlocksPerMultiprocessor(&maxActiveBlocks, vanity_scan, blockSize, 0);
-			printf("GPU: <%d, %d, %d> vanity_scan\n", blockSize, minGridSize, maxActiveBlocks);
 			vanity_scan<<<maxActiveBlocks, blockSize>>>(vanity.states[i]);
 		}
 
