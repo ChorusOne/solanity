@@ -14,6 +14,7 @@ include gpu-common.mk
 
 CHACHA_TEST_BIN=cuda_chacha_test
 ECC_TEST_BIN=cuda_ed25519_verify
+ECC_SCAN_BIN=cuda_ed25519_vanity
 LIB=cuda-crypt
 
 CUDA_HEADER_DIR:=cuda-headers
@@ -21,7 +22,7 @@ CUDA_SHA256_DIR:=cuda-sha256
 
 CFLAGS+=-DENDIAN_NEUTRAL -DLTC_NO_ASM -I$(CUDA_HEADER_DIR) -I$(CUDA_SHA256_DIR)
 
-all: $V/$(CHACHA_TEST_BIN) $V/$(ECC_TEST_BIN) $(V)/lib$(LIB).so
+all: $V/$(ECC_SCAN_BIN) $(V)/lib$(LIB).so
 
 ECC_DIR:=cuda-ecc-ed25519
 
@@ -85,6 +86,13 @@ $V/ecc_main.o: $(addprefix $(ECC_DIR)/,main.cu ed25519.h)
 	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
 
 $V/$(ECC_TEST_BIN): $V/ecc_main.o $V/lib$(LIB).so
+	$(NVCC) $(CFLAGS) -L$V -l$(LIB) $< -o $@
+
+$V/ecc_scan.o: $(addprefix $(ECC_DIR)/,vanity.cu ed25519.h)
+	@mkdir -p $(@D)
+	$(NVCC) -rdc=true $(CFLAGS) -c $< -o $@
+
+$V/$(ECC_SCAN_BIN): $V/ecc_scan.o $V/lib$(LIB).so
 	$(NVCC) $(CFLAGS) -L$V -l$(LIB) $< -o $@
 
 .PHONY:clean
